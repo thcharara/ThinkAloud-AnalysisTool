@@ -1,0 +1,44 @@
+{% extends 'ui/base.html' %}
+
+{% block title %}Participants{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <header class="panel__header">
+    <div>
+      <h1>Participants</h1>
+      <p class="muted">{{ participants|length }} transcripts · {{ total_tags }} coded units</p>
+    </div>
+  </header>
+  <div class="panel__body">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Participant</th>
+          <th>Annotation file</th>
+          <th class="numeric">Tagged units</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in participants %}
+        <tr>
+          <td>{{ row.participant_id }}</td>
+          <td>
+            {% if row.has_annotation %}
+            <span class="status status--ok">Ready</span>
+            {% else %}
+            <span class="status status--pending">Not started</span>
+            {% endif %}
+          </td>
+          <td class="numeric">{{ row.tags_total }}</td>
+          <td>
+            <a class="btn" href="{{ url_for('participant', participant_id=row.participant_id) }}">Open</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

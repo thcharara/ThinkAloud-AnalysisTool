@@ -1,0 +1,205 @@
+{% extends 'ui/base.html' %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<div class="panel animate-fade-in">
+  <header class="panel__header">
+    <div>
+      <h1>Analytics Dashboard</h1>
+      <p class="muted">Code usage statistics and patterns across all participants</p>
+    </div>
+  </header>
+
+  <div class="panel__body">
+    <div id="dashboard-loading" style="text-align: center; padding: 3rem;">
+      <div class="loading" style="width: 48px; height: 48px; border-width: 4px; margin: 0 auto 1rem;"></div>
+      <p class="muted">Loading analytics data...</p>
+    </div>
+
+    <div id="dashboard-content" style="display: none;">
+      <!-- Global Statistics -->
+      <section style="margin-bottom: 2rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Global Statistics</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+          <div class="summary__card">
+            <span class="summary__label">Total Participants</span>
+            <span class="summary__value" id="stat-participants">0</span>
+          </div>
+          <div class="summary__card">
+            <span class="summary__label">Total Tags</span>
+            <span class="summary__value" id="stat-total-tags">0</span>
+          </div>
+          <div class="summary__card">
+            <span class="summary__label">Avg Tags/Participant</span>
+            <span class="summary__value" id="stat-avg-tags">0</span>
+          </div>
+          <div class="summary__card">
+            <span class="summary__label">Most Used Code</span>
+            <span class="summary__value" id="stat-most-used">—</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Code Usage Chart -->
+      <section style="margin-bottom: 2rem;">
+        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Code Usage Distribution</h2>
+        <div id="chart-code-usage" style="background: var(--surface-elevated); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-light);">
+          <!-- Chart will be rendered here -->
+        </div>
+      </section>
+
+      <!-- Per-Participant Breakdown -->
+      <section>
+        <h2 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">Per-Participant Breakdown</h2>
+        <div style="overflow-x: auto;">
+          <table class="table" id="participant-table">
+            <thead>
+              <tr>
+                <th>Participant</th>
+                <th class="numeric">Total Tags</th>
+                <th class="numeric">Operations</th>
+                <th class="numeric">Diversity</th>
+                <th class="numeric">Unused Codes</th>
+              </tr>
+            </thead>
+            <tbody id="participant-tbody">
+              <!-- Rows will be inserted here -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<style>
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bar-chart-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bar-chart-label {
+  min-width: 180px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.bar-chart-bar-container {
+  flex: 1;
+  height: 32px;
+  background: var(--surface-elevated);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  position: relative;
+}
+
+.bar-chart-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-primary-dark));
+  transition: width 0.5s ease;
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.bar-chart-value {
+  min-width: 60px;
+  text-align: right;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const loading = document.getElementById('dashboard-loading');
+  const content = document.getElementById('dashboard-content');
+
+  try {
+    const response = await fetch('/api/usage-dashboard');
+    const data = await response.json();
+
+    // Calculate global stats
+    const participants = data.by_participant || [];
+    const aggregate = data.aggregate || {};
+    const totalTags = Object.values(aggregate.total_tags_by_code || {}).reduce((a, b) => a + b, 0);
+    const avgTags = participants.length > 0 ? Math.round(totalTags / participants.length) : 0;
+
+    // Find most used code
+    const tagCounts = aggregate.total_tags_by_code || {};
+    let mostUsedCode = '—';
+    let maxCount = 0;
+    for (const [code, count] of Object.entries(tagCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostUsedCode = code;
+      }
+    }
+
+    // Update global stats
+    document.getElementById('stat-participants').textContent = participants.length;
+    document.getElementById('stat-total-tags').textContent = totalTags.toLocaleString();
+    document.getElementById('stat-avg-tags').textContent = avgTags;
+    document.getElementById('stat-most-used').textContent = `${mostUsedCode} (${maxCount})`;
+
+    // Render code usage chart
+    const chartContainer = document.getElementById('chart-code-usage');
+    const sortedCodes = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
+    const maxTagCount = sortedCodes.length > 0 ? sortedCodes[0][1] : 1;
+
+    chartContainer.innerHTML = '<div class="bar-chart">' +
+      sortedCodes.map(([code, count]) => {
+        const percent = (count / maxTagCount) * 100;
+        return `
+          <div class="bar-chart-item">
+            <div class="bar-chart-label">${code}</div>
+            <div class="bar-chart-bar-container">
+              <div class="bar-chart-bar" style="width: ${percent}%">
+                ${count > 0 ? count : ''}
+              </div>
+            </div>
+            <div class="bar-chart-value">${count}</div>
+          </div>
+        `;
+      }).join('') +
+      '</div>';
+
+    // Render participant table
+    const tbody = document.getElementById('participant-tbody');
+    tbody.innerHTML = participants.map(p => {
+      const diversity = Math.round((p.operation_diversity || 0) * 100);
+      const unusedCount = (p.unused_operations || []).length;
+      return `
+        <tr>
+          <td><a href="/participant/${p.participant}" style="color: var(--accent-primary); font-weight: 600; text-decoration: none;">${p.participant}</a></td>
+          <td class="numeric">${p.total_tags || 0}</td>
+          <td class="numeric">${Object.keys(p.tag_counts || {}).length}</td>
+          <td class="numeric">${diversity}%</td>
+          <td class="numeric">${unusedCount}</td>
+        </tr>
+      `;
+    }).join('');
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+  } catch (error) {
+    console.error('Failed to load dashboard:', error);
+    loading.innerHTML = '<p style="color: var(--accent-danger);">Failed to load dashboard data.</p>';
+  }
+});
+</script>
+
+{% endblock %}

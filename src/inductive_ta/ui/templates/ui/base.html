@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Inductive Think-Aloud UI{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-enhanced.css') }}" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <a href="{{ url_for('index') }}" class="topbar__brand">
+          <div class="topbar__brand-icon">TA</div>
+          <span>Inductive Think-Aloud</span>
+        </a>
+        <nav class="topbar__nav">
+          <a href="{{ url_for('index') }}" class="topbar__link">Participants</a>
+          <a href="{{ url_for('dashboard') }}" class="topbar__link">Dashboard</a>
+          <a href="{{ url_for('compare_page') }}" class="topbar__link">Compare</a>
+        </nav>
+      </div>
+    </header>
+    <main class="page">
+      {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}{% endblock %}
+    <script src="{{ url_for('static', filename='js/ui-enhanced.js') }}" defer></script>
+  </body>
+</html>

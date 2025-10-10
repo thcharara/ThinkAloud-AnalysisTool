@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ participant_id }} — Scene {{ scene }} — Inductive Think-Aloud Coder</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/framework-coder-v2.css') }}">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+        <div class="nav-left">
+            <a href="/" class="btn-home">← Home</a>
+            <span class="nav-divider">|</span>
+            <span class="nav-title">{{ participant_id }} — Scene {{ scene }}</span>
+        </div>
+        <div class="nav-center">
+            <div class="scene-nav">
+                {% for s in [1, 2, 3, 4, 5] %}
+                <a href="/code-v2/{{ participant_id }}/{{ s }}"
+                   class="scene-btn {% if s == scene %}active{% endif %}">
+                    S{{ s }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="nav-right">
+            <button id="btn-save-all" class="btn-primary" title="Save all changes (Cmd/Ctrl+S)">💾 Save</button>
+            <button id="btn-undo" class="btn-icon" title="Undo (Cmd/Ctrl+Z)">↶</button>
+            <button id="btn-redo" class="btn-icon" title="Redo">↷</button>
+            <span id="save-status" class="save-status">●</span>
+        </div>
+    </header>
+
+    <!-- Ground Truth Banner -->
+    {% if scene_key %}
+    <div class="ground-truth-banner">
+        <strong>Ground Truth:</strong>
+        <span class="gt-key">{{ scene_key.ShortKey }}</span>
+        <span class="gt-features">({{ scene_key.KeyFeatures }})</span>
+        <span class="gt-type">{{ scene_key.TargetRuleType }}</span>
+        {% if scene_data.Correct is not none %}
+        <span class="perf-badge {% if scene_data.Correct %}correct{% else %}incorrect{% endif %}">
+            {{ 'CORRECT ✓' if scene_data.Correct else 'INCORRECT ✗' }}
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Main Layout: Split Pane -->
+    <div class="main-layout">
+
+        <!-- LEFT PANE: Raw Transcript with Highlighting -->
+        <div class="transcript-pane">
+            <div class="pane-header">
+                <h2>Transcript</h2>
+                <div class="transcript-controls">
+                    <button id="btn-create-micro" class="btn-unit micro" title="Create Micro unit (Turn) from selection">
+                        + Micro (Turn)
+                    </button>
+                    <button id="btn-create-meso" class="btn-unit meso" title="Create Meso unit (Episode) from selection">
+                        + Meso (Episode)
+                    </button>
+                    <span class="selection-info" id="selection-info"></span>
+                </div>
+            </div>
+
+            <div class="transcript-body" id="transcript-body">
+                <!-- Episode brackets overlay -->
+                <div class="episode-brackets" id="episode-brackets"></div>
+
+                <!-- Raw transcript text with line numbers -->
+                <div class="transcript-lines" id="transcript-lines">
+                    {{ scene_data.raw_transcript | safe }}
+                </div>
+
+                <!-- Task Image Display -->
+                <div class="task-image-container">
+                    <h3>Task Image — Scene {{ scene }}</h3>
+                    <img src="/task-image/{{ scene }}" alt="Scene {{ scene }} task image" class="task-image">
+                </div>
+            </div>
+
+            <!-- Units sidebar (shows created micro/meso units) -->
+            <div class="units-sidebar" id="units-sidebar">
+                <h3>Units Created</h3>
+                <div class="units-list">
+                    <!-- Micro units -->
+                    <div class="unit-group">
+                        <h4>Micro (Turns) <span id="micro-count">0</span></h4>
+                        <div id="micro-units-list"></div>
+                    </div>
+                    <!-- Meso units -->
+                    <div class="unit-group">
+                        <h4>Meso (Episodes) <span id="meso-count">0</span></h4>
+                        <div id="meso-units-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANE: Coding Panel with Clear Definitions -->
+        <div class="coding-pane">
+            <div class="pane-header">
+                <h2>Coding Panel</h2>
+                <div class="coding-mode-toggle">
+                    <button class="mode-btn active" data-mode="micro">Micro</button>
+                    <button class="mode-btn" data-mode="meso">Meso</button>
+                    <button class="mode-btn" data-mode="macro">Macro</button>
+                </div>
+            </div>
+
+            <div class="coding-body">
+                <!-- Current Unit Info -->
+                <div class="current-unit-info" id="current-unit-info">
+                    <div class="unit-badge">No unit selected</div>
+                    <div class="unit-text-preview" id="unit-text-preview"></div>
+                </div>
+
+                <!-- MICRO CODING PANEL -->
+                <div class="coding-panel-content active" id="panel-micro">
+
+                    <!-- Workflow Guide -->
+                    <div class="workflow-guide">
+                        <div class="workflow-step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Assign Operation (Tier A)</div>
+                        </div>
+                        <div class="workflow-step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Add Step Tag (optional)</div>
+                        </div>
+                        <div class="workflow-step" data-step="3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Mark Content (Tier B)</div>
+                        </div>
+                    </div>
+
+                    <!-- TIER A: OPERATIONS -->
+                    <section class="code-section tier-a-section">
+                        <div class="section-header">
+                            <h3>Tier A — Operations</h3>
+                            <button class="btn-help" data-help="tier-a">?</button>
+                        </div>
+                        <div class="section-note">
+                            Select <strong>exactly one</strong> operation. Mutually exclusive.
+                        </div>
+
+                        <div class="operation-list">
+                            {% set operations = [
+                                ('ORIENT', '1', 'Initial orientation and task framing',
+                                 'When: Participant orients themselves to the puzzle, reads instructions, or frames the task at the start',
+                                 'Not when: Already engaged in substantive reasoning or testing',
+                                 'Example: "Okay, so I need to figure out what makes the star yellow" or "Let me see what\'s in each panel"'),
+                                ('OBSERVE_DESCRIBE', '2', 'Pure description without inference',
+                                 'When: Participant describes what they see without making claims',
+                                 'Not when: Any inference, comparison, or hypothesis is stated',
+                                 'Example: "There\'s a small blue cone in panel A"'),
+                                ('INFERENCE', '3', 'Pattern-seeking, comparison, or preliminary reasoning',
+                                 'When: Comparing panels, noticing patterns, considering relationships, asking "what\'s different?"',
+                                 'Not when: Pure description (use OBSERVE_DESCRIBE) or stating a rule (use HYPOTHESIZE)',
+                                 'Example: "Panel A has a cone but Panel B doesn\'t" or "I\'m noticing the lit ones all have red" or "What\'s the difference?"'),
+                                ('HYPOTHESIZE', '4', 'Proposes a candidate rule',
+                                 'When: Any claim with must/always/if/I think the rule is...',
+                                 'Not when: Just describing or asking questions',
+                                 'Example: "I think it\'s the small blue cone"'),
+                                ('TEST_SEEK_EVIDENCE', '5', 'Checks candidate against panels',
+                                 'When: Explicitly checking if hypothesis holds in panels',
+                                 'Not when: Just comparing without testing a hypothesis',
+                                 'Example: "Let me check if panel C also has a blue cone"'),
+                                ('EVALUATE_REVISE', '6', 'Accepts, rejects, weakens, or revises hypothesis',
+                                 'When: Concludes about hypothesis validity or modifies it',
+                                 'Not when: Still in testing phase',
+                                 'Example: "That doesn\'t work because panel D is lit but has no cone"'),
+                                ('META_COGNITION', '7', 'Comments on difficulty, strategy, uncertainty',
+                                 'When: Reflects on own thinking process or task difficulty',
+                                 'Not when: Substantive reasoning about the puzzle',
+                                 'Example: "This is really hard" or "Let me try a different approach"'),
+                                ('RESPONSE_ENTRY', '8', 'Committing an answer',
+                                 'When: States final answer or types response',
+                                 'Not when: Still reasoning',
+                                 'Example: "[TYPING] small blue cone"')
+                            ] %}
+
+                            {% for code, key, short_def, when, not_when, example in operations %}
+                            <div class="operation-card" data-code="{{ code }}">
+                                <div class="op-header">
+                                    <div class="op-name">
+                                        <kbd>{{ key }}</kbd>
+                                        <span class="op-code">{{ code.replace('_', ' ') }}</span>
+                                    </div>
+                                    <button class="btn-select-op" data-code="{{ code }}">Select</button>
+                                </div>
+                                <div class="op-definition">{{ short_def }}</div>
+                                <details class="op-details">
+                                    <summary>When/How/Why</summary>
+                                    <div class="op-guidance">
+                                        <div class="guidance-item when">
+                                            <strong>✓ When to use:</strong>
+                                            <p>{{ when }}</p>
+                                        </div>
+                                        <div class="guidance-item not-when">
+                                            <strong>✗ When NOT to use:</strong>
+                                            <p>{{ not_when }}</p>
+                                        </div>
+                                        <div class="guidance-item example">
+                                            <strong>Example:</strong>
+                                            <p class="example-text">{{ example }}</p>
+                                        </div>
+                                    </div>
+                                </details>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+
+                    <!-- STEP TAGS -->
+                    <section class="code-section step-tags-section">
+                        <div class="section-header">
+                            <h3>Step Tags</h3>
+                            <span class="optional-badge">Optional</span>
+                        </div>
+                        <div class="section-note">
+                            Micro-sequence labels for tracking reasoning flows.
+                        </div>
+
+                        <div class="step-tags-grid">
+                            {% set steps = [
+                                ('STEP_OBS', 'Observation', 'Initial observation of features'),
+                                ('STEP_INFERENCE', 'Inference', 'Pattern-seeking or comparison before stating hypothesis'),
+                                ('STEP_HYP', 'Hypothesis', 'New hypothesis proposal'),
+                                ('STEP_TEST_CONFIRM', 'Test (Confirm)', 'Testing with positive cases'),
+                                ('STEP_TEST_DISCONFIRM', 'Test (Disconfirm)', 'Testing with negative cases or counterexamples'),
+                                ('STEP_REVISE', 'Revise', 'Revision or pivot point'),
+                                ('STEP_COMMIT', 'Commit', 'Final answer commitment')
+                            ] %}
+
+                            {% for code, label, desc in steps %}
+                            <button class="step-tag-btn" data-code="{{ code }}" title="{{ desc }}">
+                                <span class="step-label">{{ label }}</span>
+                            </button>
+                            {% endfor %}
+                            <button class="step-tag-btn clear" id="btn-clear-step">
+                                <span class="step-label">Clear</span>
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- TIER B: CONTENT -->
+                    <section class="code-section tier-b-section">
+                        <div class="section-header">
+                            <h3>Tier B — Content</h3>
+                            <button class="btn-help" data-help="tier-b">?</button>
+                        </div>
+                        <div class="section-note">
+                            Multi-label. Select all that apply. Focus on <strong>what features are mentioned</strong> in hypotheses and evidence.
+                        </div>
+
+                        <!-- B1: Feature Family -->
+                        <div class="b-category">
+                            <div class="b-category-header">
+                                <h4>B1 — Feature Family</h4>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b1" title="Learn about Feature Family codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-group">
+                                    <div class="b-group-label">Color</div>
+                                    <div class="b-checkbox-group">
+                                        <label><input type="checkbox" data-code="COLOR_Blue" value="COLOR_Blue"> Blue</label>
+                                        <label><input type="checkbox" data-code="COLOR_Green" value="COLOR_Green"> Green</label>
+                                        <label><input type="checkbox" data-code="COLOR_Red" value="COLOR_Red"> Red</label>
+                                    </div>
+                                </div>
+                                <div class="b-group">
+                                    <div class="b-group-label">Size</div>
+                                    <div class="b-checkbox-group">
+                                        <label><input type="checkbox" data-code="SIZE_Small" value="SIZE_Small"> Small</label>
+                                        <label><input type="checkbox" data-code="SIZE_Large" value="SIZE_Large"> Large</label>
+                                    </div>
+                                </div>
+                                <div class="b-group">
+                                    <div class="b-group-label">Orientation</div>
+                                    <div class="b-checkbox-group">
+                                        <label><input type="checkbox" data-code="ORIENTATION_Upright" value="ORIENTATION_Upright"> Upright</label>
+                                        <label><input type="checkbox" data-code="ORIENTATION_Slanted" value="ORIENTATION_Slanted"> Slanted</label>
+                                        <label><input type="checkbox" data-code="ORIENTATION_Horizontal" value="ORIENTATION_Horizontal"> Horizontal</label>
+                                        <label><input type="checkbox" data-code="ORIENTATION_UpsideDown" value="ORIENTATION_UpsideDown"> Upside Down</label>
+                                    </div>
+                                </div>
+                                <div class="b-group">
+                                    <div class="b-group-label">Position/Relation</div>
+                                    <div class="b-checkbox-group">
+                                        <label><input type="checkbox" data-code="POSITIONREL_AboveBelow" value="POSITIONREL_AboveBelow"> Above/Below</label>
+                                        <label><input type="checkbox" data-code="POSITIONREL_Adjacency" value="POSITIONREL_Adjacency"> Adjacency</label>
+                                    </div>
+                                </div>
+                                <div class="b-group">
+                                    <div class="b-group-label">Count</div>
+                                    <div class="b-checkbox-group">
+                                        <label><input type="checkbox" data-code="COUNT_Presence" value="COUNT_Presence"> Presence</label>
+                                        <label><input type="checkbox" data-code="COUNT_ExactN" value="COUNT_ExactN"> Exact N</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B2: Polarity -->
+                        <div class="b-category collapsed">
+                            <div class="b-category-header">
+                                <h4>B2 — Polarity</h4>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b2" title="Learn about Polarity codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-radio-group">
+                                    <label><input type="radio" name="polarity" value="Presence"> Presence (feature must be there)</label>
+                                    <label><input type="radio" name="polarity" value="Absence"> Absence (feature must NOT be there)</label>
+                                    <label><input type="radio" name="polarity" value="Conditional"> Conditional (if X then Y)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B3: Evidence Type -->
+                        <div class="b-category collapsed">
+                            <div class="b-category-header">
+                                <h4>B3 — Evidence Type</h4>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b3" title="Learn about Evidence Type codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-note">Code what the participant <strong>cites</strong>, not what exists in displays.</div>
+                                <div class="b-radio-group">
+                                    <label><input type="radio" name="evidence-type" value="PositiveCases"> Positive Cases (uses lit panels)</label>
+                                    <label><input type="radio" name="evidence-type" value="NegativeCases"> Negative Cases (uses unlit panels)</label>
+                                    <label><input type="radio" name="evidence-type" value="Mixed"> Mixed (both lit and unlit)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B4: Abstraction -->
+                        <div class="b-category collapsed">
+                            <div class="b-category-header">
+                                <h4>B4 — Abstraction</h4>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b4" title="Learn about Abstraction codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-radio-group">
+                                    <label><input type="radio" name="abstraction" value="Token"> Token (this specific item)</label>
+                                    <label><input type="radio" name="abstraction" value="Type"> Type (class/type)</label>
+                                    <label><input type="radio" name="abstraction" value="Schema"> Schema (relational schema)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B5: Confidence -->
+                        <div class="b-category collapsed">
+                            <div class="b-category-header">
+                                <h4>B5 — Confidence</h4>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b5" title="Learn about Confidence codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-radio-group">
+                                    <label><input type="radio" name="confidence" value="Definite"> Definite (unhedged)</label>
+                                    <label><input type="radio" name="confidence" value="Hedged"> Hedged ("maybe", "I think", "seems")</label>
+                                    <label><input type="radio" name="confidence" value="Disavowal"> Disavowal ("no idea", "random")</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B6: Error Type -->
+                        <div class="b-category collapsed">
+                            <div class="b-category-header">
+                                <h4>B6 — Error Type</h4>
+                                <span class="optional-badge">Diagnostic</span>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b6" title="Learn about Error Type codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-note">Only apply when error is <strong>clear from text</strong>. Do not infer.</div>
+                                <div class="b-checkbox-group">
+                                    <label><input type="checkbox" data-code="ERROR_Perceptual" value="ERROR_Perceptual"> Perceptual</label>
+                                    <label><input type="checkbox" data-code="ERROR_Logical_Overfit" value="ERROR_Logical_Overfit"> Logical Overfit (adding conjuncts to patch)</label>
+                                    <label><input type="checkbox" data-code="ERROR_Scope_Mismatch" value="ERROR_Scope_Mismatch"> Scope Mismatch (correlate ≠ cause)</label>
+                                    <label><input type="checkbox" data-code="ERROR_Attribute_Confusion" value="ERROR_Attribute_Confusion"> Attribute Confusion</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- B7: Meta Type -->
+                        <div class="b-category collapsed">
+                            <div class="b-category-header">
+                                <h4>B7 — Meta Type</h4>
+                                <span class="optional-badge">For META_COGNITION only</span>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button class="btn-help btn-help-small" data-help="tier-b7" title="Learn about Meta Type codes">?</button>
+                                    <button class="btn-expand">▼</button>
+                                </div>
+                            </div>
+                            <div class="b-category-body">
+                                <div class="b-note">Use only when Tier A operation is <strong>META_COGNITION</strong>. Distinguishes types of metacognitive statements.</div>
+                                <div class="b-radio-group">
+                                    <label><input type="radio" name="meta-type" value="Affective"> Affective (emotional response, difficulty)</label>
+                                    <label><input type="radio" name="meta-type" value="Strategic"> Strategic (explicit planning, strategy articulation)</label>
+                                    <label><input type="radio" name="meta-type" value="Monitoring"> Monitoring (self-assessment, uncertainty about progress)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                    </section>
+
+                    <!-- NOTES SECTION -->
+                    <section class="code-section notes-section">
+                        <div class="section-header">
+                            <h3>Notes</h3>
+                            <span class="optional-badge">Optional</span>
+                        </div>
+                        <div class="section-note">
+                            Add any observations, ambiguities, or contextual notes about this turn.
+                        </div>
+                        <label class="form-label">
+                            <div class="notes-input-container">
+                                <textarea id="micro-notes" rows="3" placeholder="e.g., 'Participant seems uncertain here,' 'Ambiguous between INFERENCE and HYPOTHESIZE'"></textarea>
+                                <button id="btn-dictate-notes" class="btn-dictate" type="button" title="Click to start voice dictation">
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M8 1a3 3 0 0 0-3 3v4a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm0 9a4 4 0 0 1-4-4V4a4 4 0 0 1 8 0v4a4 4 0 0 1-4 4zm-1 2.5V14h2v-1.5h1v-1h-4v1h1zM4 8a.5.5 0 0 1 .5.5A3.5 3.5 0 0 0 8 12a3.5 3.5 0 0 0 3.5-3.5.5.5 0 0 1 1 0A4.5 4.5 0 0 1 8 13a4.5 4.5 0 0 1-4.5-4.5A.5.5 0 0 1 4 8z"/>
+                                    </svg>
+                                    <span class="dictate-indicator"></span>
+                                </button>
+                            </div>
+                        </label>
+                    </section>
+
+                    <div style="display: flex; gap: 1rem; margin-top: var(--spacing-lg);">
+                        <button id="btn-apply-micro" class="btn-apply" style="flex: 1;">Apply Codes to Current Turn</button>
+                        <button id="btn-clear-form" class="btn-secondary">Clear Form</button>
+                    </div>
+                </div>
+
+                <!-- MESO CODING PANEL (Episodes) -->
+                <div class="coding-panel-content" id="panel-meso">
+
+                    <div class="workflow-guide">
+                        <div class="workflow-step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Define Episode Span</div>
+                        </div>
+                        <div class="workflow-step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Extract Hypothesis</div>
+                        </div>
+                        <div class="workflow-step" data-step="3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Code Strategy (Tier C)</div>
+                        </div>
+                        <div class="workflow-step" data-step="4">
+                            <div class="step-number">4</div>
+                            <div class="step-label">Calculate Distance</div>
+                        </div>
+                    </div>
+
+                    <!-- Episode Form -->
+                    <section class="episode-form">
+                        <h3>Episode Details</h3>
+
+                        <!-- Episode Type Selector -->
+                        <div class="episode-type-selector">
+                            <label class="form-label">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <span class="label-text">Episode Type <span class="required">*</span></span>
+                                    <button class="btn-help btn-help-small" data-help="episode-type" title="Learn about episode types">?</button>
+                                </div>
+                            </label>
+                            <div class="radio-group">
+                                <label class="radio-option">
+                                    <input type="radio" name="episode-type" value="hypothesis_episode" id="type-hypothesis" checked>
+                                    <div class="radio-label">
+                                        <strong>Hypothesis Episode</strong>
+                                        <small>Detailed tracking of one candidate rule pursuit</small>
+                                    </div>
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="episode-type" value="reasoning_chunk" id="type-chunk">
+                                    <div class="radio-label">
+                                        <strong>Reasoning Chunk</strong>
+                                        <small>Simple period of observation, exploration, or testing</small>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Shared: Turn Span -->
+                        <label class="form-label">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="label-text">Span (Turn Range) <span class="required">*</span></span>
+                                <button class="btn-help btn-help-small" data-help="turn-span" title="Learn about turn spans">?</button>
+                            </div>
+                            <div class="span-input">
+                                <input type="number" id="meso-start" placeholder="Start" min="0">
+                                <span>→</span>
+                                <input type="number" id="meso-end" placeholder="End" min="0">
+                                <button id="btn-autofill-span" class="btn-small" title="Auto-fill from coded turns">⚡ Auto-Fill</button>
+                            </div>
+                            <small><strong>Click</strong> first turn, then <strong>Shift+Click</strong> last turn in transcript (turns get orange outline). Or use Auto-Fill button.</small>
+                        </label>
+
+                        <!-- REASONING CHUNK FIELDS (shown when type = reasoning_chunk) -->
+                        <div id="chunk-fields" style="display: none;">
+                            <label class="form-label">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <span class="label-text">Chunk Type <span class="required">*</span></span>
+                                    <button class="btn-help btn-help-small" data-help="chunk-type" title="Learn about chunk types">?</button>
+                                </div>
+                                <select id="chunk-type">
+                                    <option value="">-- Select --</option>
+                                    <option value="exploratory_observation">Exploratory Observation</option>
+                                    <option value="hypothesis_flow">Hypothesis Flow</option>
+                                    <option value="testing_sequence">Testing Sequence</option>
+                                    <option value="evaluation_period">Evaluation Period</option>
+                                </select>
+                            </label>
+
+                            <label class="form-label">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <span class="label-text">Description <span class="required">*</span></span>
+                                    <button class="btn-help btn-help-small" data-help="chunk-description" title="Learn about chunk descriptions">?</button>
+                                </div>
+                                <textarea id="chunk-description" rows="3" placeholder="Briefly describe what happens in this reasoning chunk"></textarea>
+                            </label>
+                        </div>
+
+                        <!-- HYPOTHESIS EPISODE FIELDS (shown when type = hypothesis_episode) -->
+                        <div id="hypothesis-fields">
+
+                        <label class="form-label">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="label-text">Hypothesis (Verbatim) <span class="required">*</span></span>
+                                <button class="btn-help btn-help-small" data-help="hypothesis-verbatim" title="Learn about extracting hypotheses">?</button>
+                            </div>
+                            <textarea id="meso-hypothesis" rows="3" placeholder="Copy exact words participant used"></textarea>
+                        </label>
+
+                        <label class="form-label">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="label-text">Feature Bundle <span class="required">*</span></span>
+                                <button class="btn-help btn-help-small" data-help="feature-bundle" title="Learn about feature bundles">?</button>
+                            </div>
+                            <div class="feature-bundle-editor">
+                                <div id="feature-tokens-list"></div>
+                                <button id="btn-add-feature" class="btn-small">+ Add Feature</button>
+                            </div>
+                            <small>Format: family=value (e.g., color=blue, size=small)</small>
+                        </label>
+
+                        <label class="form-label">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="label-text">Evidence Cited <span class="required">*</span></span>
+                                <button class="btn-help btn-help-small" data-help="evidence-cited" title="Learn about evidence types">?</button>
+                            </div>
+                            <select id="meso-evidence">
+                                <option value="">-- Select --</option>
+                                <option value="PositiveCases">Positive Cases (lit panels)</option>
+                                <option value="NegativeCases">Negative Cases (unlit)</option>
+                                <option value="Mixed">Mixed (both)</option>
+                            </select>
+                        </label>
+
+                        <label class="form-label">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="label-text">Confidence <span class="required">*</span></span>
+                                <button class="btn-help btn-help-small" data-help="confidence" title="Learn about confidence coding">?</button>
+                            </div>
+                            <select id="meso-confidence">
+                                <option value="">-- Select --</option>
+                                <option value="Definite">Definite (unhedged)</option>
+                                <option value="Hedged">Hedged (maybe, I think)</option>
+                                <option value="Disavowal">Disavowal (no idea)</option>
+                            </select>
+                        </label>
+
+                        <label class="form-label">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="label-text">Outcome <span class="required">*</span></span>
+                                <button class="btn-help btn-help-small" data-help="outcome" title="Learn about outcome coding">?</button>
+                            </div>
+                            <select id="meso-outcome">
+                                <option value="">-- Select --</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="revised">Revised</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="pending">Pending</option>
+                            </select>
+                        </label>
+
+                        <!-- Distance to Truth -->
+                        <div class="distance-section">
+                            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                                <h4 style="margin: 0;">Distance to Truth</h4>
+                                <button class="btn-help btn-help-small" data-help="distance-to-truth" title="Learn about distance calculation">?</button>
+                            </div>
+                            <div class="distance-explanation">
+                                Compare feature bundle to ground truth at <strong>feature-family granularity</strong>.
+                            </div>
+
+                            <div class="distance-controls">
+                                <button id="btn-calculate-distance" class="btn-secondary">
+                                    🎯 Auto-Calculate
+                                </button>
+                                <select id="meso-distance">
+                                    <option value="">-- Select or Calculate --</option>
+                                    <option value="ExactMatch">Exact Match (all required features)</option>
+                                    <option value="FamilyMatch_Partial">Family Match Partial (≥1 correct family, missing key dimension)</option>
+                                    <option value="FamilyMismatch">Family Mismatch (no overlap)</option>
+                                    <option value="RuleFormMismatch">Rule Form Mismatch (relational vs atomic)</option>
+                                </select>
+                            </div>
+
+                            <div id="distance-breakdown" class="distance-breakdown"></div>
+                        </div>
+
+                        </div>
+                        <!-- END HYPOTHESIS EPISODE FIELDS -->
+
+                        <!-- SHARED: Tier C Strategy Codes -->
+                        <div class="strategy-section">
+                            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                                <h4 style="margin: 0;">Tier C — Strategy Codes</h4>
+                                <button class="btn-help btn-help-small" data-help="tier-c-strategy" title="Learn about strategy codes">?</button>
+                            </div>
+                            <div class="strategy-note">Episode-level. Select all that apply to characterize this reasoning period.</div>
+
+                            {% set strategies = {
+                                'Search Mode': ['SearchMode_featureBreadth', 'SearchMode_panelBreadth', 'SearchMode_featureDepth', 'SearchMode_panelDepth'],
+                                'Hypothesis Management': ['HypMgmt_SingleTrack', 'HypMgmt_Parallel', 'HypMgmt_Elimination'],
+                                'Evidence Policy': ['EvidencePolicy_ConfirmOnly', 'EvidencePolicy_Contrastive', 'EvidencePolicy_Falsification'],
+                                'Complexity': ['Complexity_Atomic', 'Complexity_Conjunctive', 'Complexity_Relational'],
+                                'Cross-Scene': ['CrossScene_Transfer', 'CrossScene_Perseveration', 'CrossScene_AdaptiveShift']
+                            } %}
+
+                            {% for category, codes in strategies.items() %}
+                            <div class="strategy-group">
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <div class="strategy-group-label">{{ category }}</div>
+                                    <button class="btn-help btn-help-small" data-help="strategy-{{ category.lower().replace(' ', '-') }}" title="Learn about {{ category }}">?</button>
+                                </div>
+                                <div class="strategy-checkboxes">
+                                    {% for code in codes %}
+                                    <label>
+                                        <input type="checkbox" class="strategy-checkbox" value="{{ code }}">
+                                        {{ code.split('_')[1] if '_' in code else code }}
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- SHARED: Notes -->
+                        <label class="form-label">
+                            <span class="label-text">Notes</span>
+                            <textarea id="meso-notes" rows="2" placeholder="Optional notes"></textarea>
+                        </label>
+
+                        <div class="form-actions">
+                            <button id="btn-save-episode" class="btn-primary">Save Episode</button>
+                            <button id="btn-new-episode" class="btn-secondary">New Episode</button>
+                            <button id="btn-delete-episode" class="btn-danger">Delete</button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- MACRO CODING PANEL -->
+                <div class="coding-panel-content" id="panel-macro">
+                    <section class="macro-section">
+                        <h3>Macro Analysis (Participant × Scene)</h3>
+                        <p class="section-note">
+                            Track patterns across scenes for this participant. View transfer, perseveration, and adaptation.
+                        </p>
+
+                        <div class="macro-stats">
+                            <div class="stat-card">
+                                <div class="stat-label">Total Episodes</div>
+                                <div class="stat-value" id="macro-episodes">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Avg Episode Length</div>
+                                <div class="stat-value" id="macro-avg-length">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Dominant Strategy</div>
+                                <div class="stat-value" id="macro-strategy">—</div>
+                            </div>
+                        </div>
+
+                        <div class="cross-scene-section">
+                            <h4>Cross-Scene Patterns</h4>
+                            <table class="cross-scene-table">
+                                <thead>
+                                    <tr>
+                                        <th>Scene</th>
+                                        <th>First Feature</th>
+                                        <th>Pattern</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cross-scene-tbody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Coding Guide</h2>
+                <button class="btn-close" id="btn-close-help">×</button>
+            </div>
+            <div class="modal-body" id="help-modal-body">
+                <!-- Dynamic content loaded based on context -->
+            </div>
+        </div>
+    </div>
+
+    <!-- State and Data -->
+    <script>
+        window.APP_DATA = {
+            participant_id: "{{ participant_id }}",
+            scene: {{ scene }},
+            scene_key: {{ scene_key.model_dump() | tojson if scene_key else 'null' }},
+            turns: {{ turns_json | tojson }},
+            episodes: {{ episodes_json | tojson }},
+            raw_transcript: {{ scene_data.raw_transcript | tojson }}
+        };
+    </script>
+
+    <script src="{{ url_for('static', filename='js/framework-coder-v2.js') }}"></script>
+</body>
+</html>
