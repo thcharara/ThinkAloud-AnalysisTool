@@ -36,9 +36,6 @@ app.config['JSON_SORT_KEYS'] = False
 # Global constants
 PROJECT_ROOT = project_root
 
-# Global instances (initialized in __main__)
-loader = turn_parser = exporter = None
-
 
 # ============================================================================
 # Home: Project Validation
@@ -52,7 +49,7 @@ def index():
     Blocks if validation fails; shows list of participants if passes.
     """
     # Run validation
-    validation = loader.validate_all()
+    validation = app.config['loader'].validate_all()
 
     if not validation.is_valid():
         # Show blocking validation errors
@@ -62,10 +59,10 @@ def index():
         )
 
     # Load participant list
-    participant_ids = turn_parser.get_participant_ids()
+    participant_ids = app.config['turn_parser'].get_participant_ids()
 
     # Load codebook for reference
-    codebook = loader.load_codebook()
+    codebook = app.config['loader'].load_codebook()
 
     return render_template(
         'framework/index.html',
@@ -776,15 +773,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    # Initialize loaders with specified config
-    global loader, turn_parser, exporter
-
+    # Initialize loaders with specified config and store in app.config
     from src.inductive_ta.project_loader import ProjectLoader
     from src.inductive_ta.turn_parser import TurnParser
     from src.inductive_ta.jsonl_exporter import JSONLExporter
 
-    loader = ProjectLoader(PROJECT_ROOT, config_path=args.config)
-    turn_parser = TurnParser(PROJECT_ROOT, config_path=args.config)
+    app.config['loader'] = ProjectLoader(PROJECT_ROOT, config_path=args.config)
+    app.config['turn_parser'] = TurnParser(PROJECT_ROOT, config_path=args.config)
 
     # Get exports_dir from config
     import yaml
@@ -792,7 +787,7 @@ if __name__ == '__main__':
     with open(config_file) as f:
         config = yaml.safe_load(f)
     exports_dir = PROJECT_ROOT / config['paths']['exports_dir']
-    exporter = JSONLExporter(exports_dir)
+    app.config['exporter'] = JSONLExporter(exports_dir)
 
     print(f"\n{'='*60}")
     print(f"🚀 Inductive Think-Aloud Framework UI")
