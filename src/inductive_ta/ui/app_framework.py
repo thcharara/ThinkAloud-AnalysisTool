@@ -85,13 +85,13 @@ def coder_workspace(participant_id: str, scene: int):
     Right: Coding sidebar (Tier A/B/C, step-tags, episode editor)
     """
     # Load participant's scene data
-    scene_data = turn_parser.load_participant_scene(participant_id, scene)
+    scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
     if not scene_data:
         return f"Scene {scene} not found for {participant_id}", 404
 
     # Load existing codes from JSONL if available
-    existing_turns = exporter.load_turns_for_participant_scene(participant_id, scene)
-    existing_episodes = exporter.load_episodes_for_participant_scene(participant_id, scene)
+    existing_turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
+    existing_episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
 
     # Merge existing codes into parsed turns
     if existing_turns:
@@ -108,11 +108,11 @@ def coder_workspace(participant_id: str, scene: int):
     scene_data.episodes = existing_episodes
 
     # Load codebook and ground truth
-    codebook = loader.load_codebook()
-    scene_key = loader.get_scene_key(scene)
+    codebook = app.config["loader"].load_codebook()
+    scene_key = app.config["loader"].get_scene_key(scene)
 
     # Get all participants for navigator
-    all_participants = turn_parser.get_participant_ids()
+    all_participants = app.config["turn_parser"].get_participant_ids()
 
     # Convert turns and episodes to dicts for JSON serialization
     turns_data = [turn.model_dump() for turn in scene_data.turns]
@@ -139,19 +139,19 @@ def coder_workspace(participant_id: str, scene: int):
 def inline_coder(participant_id: str, scene: int):
     """Inline span coding view: renders raw scene text and allows span-level coding."""
     # Load scene raw text using TurnParser split (but do not create turn objects)
-    all_scenes = turn_parser.parse_participant(participant_id)
+    all_scenes = app.config["turn_parser"].parse_participant(participant_id)
     scene_data = next((s for s in all_scenes if s.scene == scene), None)
     if not scene_data:
         return f"Scene {scene} not found for {participant_id}", 404
 
     # Reconstruct scene text by concatenating original lines in that scene
-    # turn_parser._split_into_scenes already preserved raw lines; here we rebuild from transcript file
-    transcript_path = turn_parser.transcripts_dir / f"{participant_id}.txt"
+    # app.config["turn_parser"]._split_into_scenes already preserved raw lines; here we rebuild from transcript file
+    transcript_path = app.config["turn_parser"].transcripts_dir / f"{participant_id}.txt"
     raw = transcript_path.read_text(encoding='utf-8', errors='replace')
     # Compute scene chunks with the parser regex
     chunks = {}
     text = raw
-    matches = list(turn_parser.scene_regex.finditer(text))
+    matches = list(app.config["turn_parser"].scene_regex.finditer(text))
     for idx, m in enumerate(matches):
         num = int(m.group('num'))
         start = m.end()
@@ -160,11 +160,11 @@ def inline_coder(participant_id: str, scene: int):
     scene_text = chunks.get(scene, '')
 
     # Load existing spans for this scene
-    spans = exporter.load_spans_for_participant_scene(participant_id, scene)
+    spans = app.config["exporter"].load_spans_for_participant_scene(participant_id, scene)
 
-    codebook = loader.load_codebook()
-    scene_key = loader.get_scene_key(scene)
-    all_participants = turn_parser.get_participant_ids()
+    codebook = app.config["loader"].load_codebook()
+    scene_key = app.config["loader"].get_scene_key(scene)
+    all_participants = app.config["turn_parser"].get_participant_ids()
 
     return render_template(
         'framework/inline.html',
@@ -205,7 +205,7 @@ def api_save_turn():
     turn_index = data['turn_index']
 
     # Load scene turns
-    scene_data = turn_parser.load_participant_scene(participant_id, scene)
+    scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
     if not scene_data:
         return jsonify({'error': 'Scene not found'}), 404
 
@@ -234,14 +234,14 @@ def api_save_turn():
     }
 
     # Export updated turns
-    exporter.export_participant_scene(
+    app.config["exporter"].export_participant_scene(
         participant_id, scene,
         scene_data.turns,
         scene_data.episodes
     )
 
     # Log to changelog
-    exporter.log_change(
+    app.config["exporter"].log_change(
         participant_id, scene,
         action_type='update_turn',
         before=before,
@@ -286,7 +286,7 @@ def api_save_episode():
     episode_id = data.get('episode_id')
 
     # Load existing episodes
-    episodes = exporter.load_episodes_for_participant_scene(participant_id, scene)
+    episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
 
     # Find or create episode
     if episode_id:
@@ -319,17 +319,17 @@ def api_save_episode():
     episode.Notes = data.get('Notes', '')
 
     # Load turns for export
-    turns = exporter.load_turns_for_participant_scene(participant_id, scene)
+    turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
     if not turns:
         # Use parsed turns
-        scene_data = turn_parser.load_participant_scene(participant_id, scene)
+        scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
         turns = scene_data.turns if scene_data else []
 
     # Export
-    exporter.export_participant_scene(participant_id, scene, turns, episodes)
+    app.config["exporter"].export_participant_scene(participant_id, scene, turns, episodes)
 
     # Log to changelog
-    exporter.log_change(
+    app.config["exporter"].log_change(
         participant_id, scene,
         action_type='save_episode',
         after={'episode_id': episode_id},
@@ -365,7 +365,7 @@ def api_calculate_distance():
     feature_bundle = data.get('FeatureBundle', [])
 
     # Load ground truth
-    scene_key = loader.get_scene_key(scene)
+    scene_key = app.config["loader"].get_scene_key(scene)
     if not scene_key:
         return jsonify({'error': 'Scene key not found'}), 404
 
@@ -406,7 +406,7 @@ def api_codebook():
     - Tier C strategy codes with descriptions
     - Step-tags with descriptions
     """
-    codebook = loader.load_codebook()
+    codebook = app.config["loader"].load_codebook()
 
     return jsonify({
         'meta': codebook.meta,
@@ -438,19 +438,19 @@ def api_delete_episode(episode_id: str):
     scene = int(parts[1][1:])  # Remove 'S' prefix
 
     # Load episodes
-    episodes = exporter.load_episodes_for_participant_scene(participant_id, scene)
+    episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
 
     # Find and remove
     episodes = [e for e in episodes if e.episode_id != episode_id]
 
     # Load turns
-    turns = exporter.load_turns_for_participant_scene(participant_id, scene)
+    turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
 
     # Export
-    exporter.export_participant_scene(participant_id, scene, turns, episodes)
+    app.config["exporter"].export_participant_scene(participant_id, scene, turns, episodes)
 
     # Log
-    exporter.log_change(
+    app.config["exporter"].log_change(
         participant_id, scene,
         action_type='delete_episode',
         before={'episode_id': episode_id},
@@ -488,12 +488,12 @@ def api_scene_stats():
     if not participant_id or scene is None:
         return jsonify({'error': 'participant_id and scene are required'}), 400
 
-    turns = exporter.load_turns_for_participant_scene(participant_id, scene)
-    episodes = exporter.load_episodes_for_participant_scene(participant_id, scene)
+    turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
+    episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
 
     # If no saved annotations yet, fall back to parsed turns for counts
     if not turns:
-        scene_data = turn_parser.load_participant_scene(participant_id, scene)
+        scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
         turns = scene_data.turns if scene_data else []
         episodes = scene_data.episodes if scene_data else []
 
@@ -509,9 +509,9 @@ def api_scene_stats():
 @app.post('/api/export/matrices')
 def api_export_matrices():
     """Generate matrix CSVs (feature attention, evidence policy)."""
-    turns = exporter.load_turns()
-    episodes = exporter.load_episodes()
-    export_to_csv_matrices(turns, episodes, exporter.exports_dir)
+    turns = app.config["exporter"].load_turns()
+    episodes = app.config["exporter"].load_episodes()
+    export_to_csv_matrices(turns, episodes, app.config["exporter"].exports_dir)
     timestamp = datetime.utcnow().isoformat() + 'Z'
     return jsonify({'success': True, 'timestamp': timestamp})
 
@@ -522,7 +522,7 @@ def api_export_snapshot():
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
         for filename in ['corpus_enriched.jsonl', 'episodes.jsonl', 'CHANGELOG.jsonl']:
-            path = exporter.exports_dir / filename
+            path = app.config["exporter"].exports_dir / filename
             if path.exists():
                 zf.write(path, arcname=filename)
 
@@ -562,8 +562,8 @@ def api_spans_add():
         step_tag=data.get('step_tag'),
         notes=data.get('notes', ''),
     )
-    exporter.add_span(span)
-    exporter.log_change(participant_id, scene, action_type='add_span', after=span.model_dump(), notes='Inline span add')
+    app.config["exporter"].add_span(span)
+    app.config["exporter"].log_change(participant_id, scene, action_type='add_span', after=span.model_dump(), notes='Inline span add')
     return jsonify({'success': True, 'span': span.model_dump()})
 
 
@@ -576,8 +576,8 @@ def api_spans_delete(span_id: str):
         scene = int(parts[1][1:])
     except Exception:
         participant_id, scene = 'NA', 0
-    exporter.delete_span(span_id)
-    exporter.log_change(participant_id, scene, action_type='delete_span', before={'span_id': span_id})
+    app.config["exporter"].delete_span(span_id)
+    app.config["exporter"].log_change(participant_id, scene, action_type='delete_span', before={'span_id': span_id})
     return jsonify({'success': True})
 
 
@@ -587,7 +587,7 @@ def api_spans_list():
     scene = request.args.get('scene', type=int)
     if not participant_id or scene is None:
         return jsonify({'error': 'participant_id and scene are required'}), 400
-    spans = exporter.load_spans_for_participant_scene(participant_id, scene)
+    spans = app.config["exporter"].load_spans_for_participant_scene(participant_id, scene)
     return jsonify({'spans': [s.model_dump() for s in spans]})
 
 
@@ -608,19 +608,19 @@ def coder_v2(participant_id: str, scene: int):
     - Workflow-driven coding process
     """
     # Load scene data
-    all_scenes = turn_parser.parse_participant(participant_id)
+    all_scenes = app.config["turn_parser"].parse_participant(participant_id)
     scene_data = next((s for s in all_scenes if s.scene == scene), None)
     if not scene_data:
         return f"Scene {scene} not found for {participant_id}", 404
 
     # Get raw transcript text for this scene
-    transcript_path = turn_parser.transcripts_dir / f"{participant_id}.txt"
+    transcript_path = app.config["turn_parser"].transcripts_dir / f"{participant_id}.txt"
     raw = transcript_path.read_text(encoding='utf-8', errors='replace')
 
     # Extract scene-specific text
     chunks = {}
     text = raw
-    matches = list(turn_parser.scene_regex.finditer(text))
+    matches = list(app.config["turn_parser"].scene_regex.finditer(text))
     for idx, m in enumerate(matches):
         num = int(m.group('num'))
         start = m.end()
@@ -630,15 +630,15 @@ def coder_v2(participant_id: str, scene: int):
     scene_text = chunks.get(scene, '')
 
     # Load existing codes from JSONL if available
-    existing_turns = exporter.load_turns_for_participant_scene(participant_id, scene)
-    existing_episodes = exporter.load_episodes_for_participant_scene(participant_id, scene)
+    existing_turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
+    existing_episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
 
     # Load codebook and ground truth
-    codebook = loader.load_codebook()
-    scene_key = loader.get_scene_key(scene)
+    codebook = app.config["loader"].load_codebook()
+    scene_key = app.config["loader"].get_scene_key(scene)
 
     # Get all participants for navigator
-    all_participants = turn_parser.get_participant_ids()
+    all_participants = app.config["turn_parser"].get_participant_ids()
 
     # Prepare data for template
     turns_data = [turn.model_dump() for turn in existing_turns] if existing_turns else []
@@ -717,16 +717,16 @@ def api_save_coding_v2():
 
     # Export using the participant_scene method (handles JSONL updates correctly)
     if turns or episodes:
-        exporter.export_participant_scene(participant_id, scene, turns, episodes)
+        app.config["exporter"].export_participant_scene(participant_id, scene, turns, episodes)
 
         if turns:
-            exporter.log_change(participant_id, scene, action_type='bulk_save_turns',
+            app.config["exporter"].log_change(participant_id, scene, action_type='bulk_save_turns',
                               after={'count': len(turns)})
             # Also export structured JSON with labels
-            exporter.export_structured_json(participant_id, scene, turns)
+            app.config["exporter"].export_structured_json(participant_id, scene, turns)
 
         if episodes:
-            exporter.log_change(participant_id, scene, action_type='bulk_save_episodes',
+            app.config["exporter"].log_change(participant_id, scene, action_type='bulk_save_episodes',
                               after={'count': len(episodes)})
 
     return jsonify({'success': True, 'turns_saved': len(turns), 'episodes_saved': len(episodes)})
