@@ -1,0 +1,85 @@
+# Inductive Think-Aloud Codebook
+*Version:* 2.0.0
+
+## Tier A — Operations
+- **ORIENT** — Initial orientation and task framing.
+- **OBSERVE_DESCRIBE** — Pure description of visible features; no inference.
+- **INFERENCE** — Pattern-seeking, comparison, or preliminary reasoning (formerly COMPARE_CONTRAST).
+- **HYPOTHESIZE** — Proposes a candidate rule (explicit or implicit).
+- **TEST_SEEK_EVIDENCE** — Checks candidate against panels; cites cases.
+- **EVALUATE_REVISE** — Evaluates, revises, weakens, or abandons the hypothesis.
+- **META_COGNITION** — Comments on difficulty/strategy/uncertainty.
+- **RESPONSE_ENTRY** — Typing/committing an answer.
+
+## Tier B — Content
+### B1_FeatureFamily
+- **COLOR_Blue** — Mentions blue as a feature.
+- **COLOR_Green** — Mentions green as a feature.
+- **COLOR_Red** — Mentions red as a feature.
+- **SIZE_Small** — Mentions small.
+- **SIZE_Large** — Mentions large.
+- **ORIENTATION_Upright** — Upright/standing.
+- **ORIENTATION_Slanted** — Slanted/sideways.
+- **ORIENTATION_Horizontal** — Horizontal.
+- **ORIENTATION_UpsideDown** — Upside down.
+- **POSITIONREL_AboveBelow** — Above/below or stacked.
+- **POSITIONREL_Adjacency** — Next to/adjacent/clustered.
+- **COUNT_Presence** — Presence/at least one.
+- **COUNT_ExactN** — Exact counts.
+### B2_Polarity
+- **Presence** — Must include X.
+- **Absence** — Must not include X.
+- **Conditional** — If X then Y.
+### B3_EvidenceType
+- **PositiveCases** — Cites lit panels as evidence.
+- **NegativeCases** — Cites unlit panels as counterevidence.
+- **Mixed** — Uses both positive and negative.
+### B4_Abstraction
+- **Token** — Refers to this specific item (e.g., 'this little blue').
+- **Type** — Refers to the class (e.g., 'blue triangles slanted').
+- **Schema** — Relational schema (e.g., 'stacked triangles').
+### B5_Confidence
+- **Definite** — Unhedged (is/has).
+- **Hedged** — Hedges (maybe, I think, seems).
+- **Disavowal** — States cannot figure out; randomness.
+### B6_ErrorType
+- **Perceptual** — Misread of a visible feature.
+- **Logical_Overfit** — Adds conjuncts to patch mismatches.
+- **Scope_Mismatch** — Treats correlate as cause; wrong scope.
+- **Attribute_Confusion** — Mixes/omits key attributes (e.g., size).
+### B7_MetaType
+*Use only when Tier A operation is META_COGNITION*
+- **Affective** — Emotional response, difficulty statements ("This is hard," "I'm confused").
+- **Strategic** — Explicit planning, strategy articulation ("Let me check all lit panels first," "I'll test each color").
+- **Monitoring** — Self-assessment, progress evaluation ("Am I on the right track?," "I'm not making progress").
+
+## Tier C — Strategy
+- **SearchMode_featureBreadth** — Scans many different features quickly.
+- **SearchMode_panelBreadth** — Moves across many panels/stimuli quickly.
+- **SearchMode_featureDepth** — Locks onto one feature and explores thoroughly.
+- **SearchMode_panelDepth** — Examines a single panel or small subset deeply.
+- **HypMgmt_SingleTrack** — Pursues one idea at a time.
+- **HypMgmt_Parallel** — Holds multiple competing ideas.
+- **HypMgmt_Elimination** — Systematic elimination.
+- **EvidencePolicy_ConfirmOnly** — Seeks confirming cases only.
+- **EvidencePolicy_Contrastive** — Compares lit vs unlit deliberately.
+- **EvidencePolicy_Falsification** — Actively seeks counterexamples.
+- **Complexity_Atomic** — Simple single-feature rules.
+- **Complexity_Conjunctive** — Multiple features combined.
+- **Complexity_Relational** — Relational rules (above/below, adjacency).
+- **CrossScene_Transfer** — Reuses prior successful feature family.
+- **CrossScene_Perseveration** — Recycles previously wrong idea.
+- **CrossScene_AdaptiveShift** — Adjusts strategy appropriately.
+
+## Step Tags
+- **STEP_OBS** — Observation (initial feature detection)
+- **STEP_INFERENCE** — Inference/pattern-seeking (between observation and hypothesis)
+- **STEP_HYP** — Hypothesis proposal
+- **STEP_TEST_CONFIRM** — Test with confirming evidence
+- **STEP_TEST_DISCONFIRM** — Test with disconfirming evidence
+- **STEP_REVISE** — Revision after conflict
+- **STEP_COMMIT** — Commit/answer
+
+## Notes
+- **Cross-panel comparison**: Use INFERENCE operation + B3_EvidenceType (Mixed) to capture when participant compares lit vs unlit panels
+- **Reasoning sequence**: OBS → INFERENCE → HYP → TEST → REVISE → COMMIT
