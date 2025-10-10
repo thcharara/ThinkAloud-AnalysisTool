@@ -33,11 +33,11 @@ from src.inductive_ta.analytics import suggest_turn_codes, compute_scene_statist
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
 
-# Initialize loaders
+# Global variables - will be initialized in main()
 PROJECT_ROOT = project_root
-loader = ProjectLoader(PROJECT_ROOT)
-turn_parser = TurnParser(PROJECT_ROOT)
-exporter = JSONLExporter(PROJECT_ROOT / "05_exports")
+loader = None
+turn_parser = None
+exporter = None
 
 
 # ============================================================================
@@ -777,6 +777,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Reinitialize loaders with specified config
+    global loader, turn_parser, exporter
+
     from src.inductive_ta.project_loader import ProjectLoader
     from src.inductive_ta.turn_parser import TurnParser
     from src.inductive_ta.jsonl_exporter import JSONLExporter
