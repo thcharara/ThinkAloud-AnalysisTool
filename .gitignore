@@ -1,0 +1,19 @@
+__pycache__/
+.env
+.venv/
+.DS_Store
+archive/
+annotations/
+metadata/
+admin/
+*.nvpx~
+*.nvpx
+Inductive-ThinkAloud.nvpx
+clean_transcripts/
+exports/
+demo_exports/
+!demo_exports/.gitkeep
+demo_store/
+*.log
+# Local config overrides (keep config.yaml.example in Git)
+config/config.yaml
