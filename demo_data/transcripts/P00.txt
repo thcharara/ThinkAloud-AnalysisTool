@@ -1,0 +1,19 @@
+Scene 1:
+Alright, let me look at what we have here. Okay, so panel A has a blue circle... panel B has nothing, panel C has a red triangle. The lit panel is A. Let me see what's different about it. Well, A has blue, but C is unlit and has red. So maybe it's the blue color? Or maybe it's about circles versus triangles? Let me check panel D. It has a small green square and it's unlit. So far only A is lit, and it's the only one with blue. I think it might be blue.
+[TYPING] The rule is: has blue.
+
+Scene 2:
+Okay, new scene. Let me see what's going on here. Panel A is unlit and has one small red cone. Panel B is lit and has two small blue cones stacked. Panel C is also lit, and it has... two green triangles, also stacked. Hmm, this is interesting. Both lit ones have two shapes stacked. Wait, but panel D has two red squares next to each other, not stacked, and it's unlit. So maybe it's about stacking specifically, not just having two shapes. Let me test this idea. B has stacked cones - lit. C has stacked triangles - lit. D has adjacent squares - unlit. Yeah, I'm pretty confident it's about shapes being stacked vertically.
+[TYPING] My answer is: two shapes stacked vertically.
+
+Scene 3:
+Alright, scene three. This looks more complex. Panel A has a large blue cone upright. It's unlit. Panel B has two small blue cones, both tilted sideways. It's lit! Panel C has one small red triangle upright. Unlit. Panel D has three small blue cones in different orientations. It's lit. Okay so B and D are lit, and they both have multiple blue cones. A has blue but only one. Wait, but C doesn't have blue at all and it's unlit, so blue still matters. Maybe the rule is: at least two blue cones? Let me double-check. B has two blue cones - lit. D has three blue cones - lit. A has one blue cone - unlit. Actually, I notice B and D also both have tilted cones. But A's cone is upright... Hmm, this is confusing. Let me think about what's really the pattern here. I'm going to go with multiple blue cones because that seems most consistent.
+[TYPING] I think the rule is exactly two or more blue cones.
+
+Scene 4:
+This one looks tricky already.Panel A has a red triangle above a blue circle. It's lit. Panel B has a blue circle above a red triangle. It's also lit! Panel C has two green squares side by side. Unlit. Panel D has a single large blue cone. Unlit. So A and B are both lit, and they both have... a red triangle and a blue circle in them. Oh! They both have BOTH red and blue, but in different positions. So maybe position doesn't matter? It's just about having both colors? Let me check. A has red and blue - lit. B has red and blue - lit. C only has green - unlit. D only has blue - unlit. Yeah, I'm pretty sure it's about having both red AND blue together. This is a conjunctive rule - you need BOTH features.
+[TYPING] The rule is: contains both red and blue.
+
+Scene 5:
+Final scene, let's see what we've got. Okay wow, there are a lot of shapes in each panel. Panel A has four shapes: three red cones and one blue triangle. It's lit. Panel B has three shapes: one red cone, one blue cone, one green square. Unlit. Panel C has five shapes: four red triangles and one green circle. It's lit. Panel D has four shapes: two blue cones, two green triangles. Unlit. So A and C are lit. What do they have in common? A has three red... C has four red... They both have MORE red than any other color! Let me verify. A has 3 red, 1 blue. B has 1 red, 1 blue, 1 green. C has 4 red, 1 green. D has 2 blue, 2 green. Yeah, in A and C, red is the majority color. In B and D, no single color dominates. This is interesting - it's not just presence or absence, it's about quantity.
+[TYPING] My final answer is: more red shapes than any other single color.

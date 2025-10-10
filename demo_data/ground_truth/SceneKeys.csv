@@ -1,0 +1,3 @@
+Scene,TargetRuleType,KeyFeatures,ShortKey
+1,Attribute,"color=blue;shape=circle","any blue circle"
+2,Relational,"relation=stacked","stacked shapes"

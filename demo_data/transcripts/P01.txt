@@ -1,0 +1,24 @@
+Scene 1:
+Okay, I need to figure out what makes the star light up yellow.
+I'm looking at panel A first. It has a small blue cone pointing upward. Panel B is empty - nothing there. Panel C has a red triangle, also small and upright. Panel D has a green square, small size too. Only panel A is lit with the yellow star. What's unique about A? Well, it's blue... it's a cone... it's small... it's upright. Panels C and D are also small and upright but different colors and shapes. I think it's probably the blue color. Let me go with that.
+[TYPING] blue
+
+Scene 2:
+New puzzle. Let me look at all the panels first before jumping to conclusions.
+Panel A: one small red cone. Unlit. Panel B: two small blue cones, one on top of the other. Lit! Panel C: two green triangles stacked. Also lit! Panel D: two red squares but they're next to each other, not stacked. Unlit. Hmm, okay so B and C are both lit and both have stacking. D has two shapes but they're not stacked - it's unlit. Wait, maybe it's not just about two shapes, but about them being ABOVE/BELOW each other? Let me reconsider... no, I think stacking is the key. Vertically stacked shapes.
+[TYPING] stacked shapes
+
+Scene 3:
+This one looks more complicated already.
+Ugh, this is hard. Let me just try to observe everything carefully. Panel A: one large blue cone, standing upright. Unlit. Panel B: two small blue cones, both tilted sideways. Lit. Panel C: one small red triangle, upright. Unlit. Panel D: three small blue cones, some tilted, some upright. Lit. Okay so panels B and D are lit. They both have blue cones, and they both have MORE than one cone. Maybe it's about having multiple cones? Or specifically multiple blue things? A has blue but only one cone. B has two blue cones. D has three blue cones. Actually wait - could it be about the size? A has LARGE, but B and D have SMALL cones. Or maybe it's about the tilted orientation? Both B and D have tilted cones... No wait, D has mixed orientations. I'm overthinking this. I'm just going to guess it's about having at least two blue cones.
+[TYPING] at least 2 blue cones
+
+Scene 4:
+Let me approach this systematically. I'll check each lit panel and write down what they have, then compare. Panel A is lit. It has: red triangle on top, blue circle on bottom. Panel B is lit. It has: blue circle on top, red triangle on bottom. Panel C is unlit. It has: two green squares side by side. Panel D is unlit. It has: one large blue cone alone. So the lit ones both have a red triangle AND a blue circle. The position is different - A has red above blue, B has blue above red - but both are lit.
+So position doesn't matter, just having BOTH colors present. C only has green. D only has blue. Neither has both red and blue. This makes sense! It's a combination rule.
+[TYPING] has both red and blue
+
+Scene 5:
+Last one. Let's see. Okay, there are lots of shapes in each panel. I need to count carefully. Panel A, let me count the colors... I see 1, 2, 3 red cones and 1 blue triangle. Total 4 shapes. Lit. Panel B, I see 1 red cone, 1 blue cone, 1 green square. Total 3 shapes. Unlit. Panel C, Wow, lots here. I count 1, 2, 3, 4 red triangles and 1 green circle. Total 5 shapes. Lit. Panel D, 2 blue cones, 2 green triangles. Total 4 shapes. Unlit. So A and C are lit. What's special about them? A has mostly red (3 out of 4). C also has mostly red (4 out of 5). B has equal amounts of each color. D has equal blue and green. I think the rule is that there has to be more of one color than the others.
+Actually, more specifically, more RED than any other color. Let me double-check: A has 3 red vs 1 blue - yes, red is more. C has 4 red vs 1 green - yes. B has 1 of each color - no majority. D has 2 blue and 2 green - tied, no majority. Yeah, I'm confident it's about having red as the majority.
+[TYPING] more red than any other color
