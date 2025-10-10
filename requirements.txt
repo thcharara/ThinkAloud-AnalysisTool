@@ -1,0 +1,15 @@
+pandas
+numpy
+pydantic
+regex
+rich
+typer[all]
+pyyaml
+unidecode
+python-dateutil
+matplotlib
+scikit-learn
+seaborn
+jupyter
+ipykernel
+flask
