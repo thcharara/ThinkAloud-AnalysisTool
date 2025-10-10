@@ -1,0 +1,30 @@
+# Demo configuration for GitHub repository
+# This config points to synthetic demo data only
+# For your own research, use config/config.yaml (not tracked in Git)
+
+paths:
+  transcripts_dir: demo_data/transcripts
+  metadata_dir: demo_data/metadata
+  ground_truth: demo_data/ground_truth/SceneKeys.csv
+  exports_dir: demo_exports
+  figures_dir: demo_exports/figures
+
+scenes:
+- 1
+- 2
+- 3
+- 4
+- 5
+
+markers:
+  scene_header_regex: ^(?:##\s*)?scene\s*(?P<num>\d+)(?:\s*##)?\s*:?(?:\s*)$
+  tags:
+  - '[READING]'
+  - '[THINKING]'
+  - '[TYPING]'
+
+normalize:
+  ascii_fallback: true
+  smart_quotes: true
+  ellipses_to_three_dots: true
+  dashes_to_hyphen: true
