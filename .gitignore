@@ -15,5 +15,5 @@ demo_exports/
 !demo_exports/.gitkeep
 demo_store/
 *.log
-# Local config overrides (keep config.yaml.example in Git)
+# Local config overrides
 config/config.yaml
