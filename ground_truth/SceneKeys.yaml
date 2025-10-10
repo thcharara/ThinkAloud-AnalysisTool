@@ -1,0 +1,20 @@
+- Scene: 1
+  TargetRuleType: simple feature
+  KeyFeatures: color=red
+  ShortKey: at least one red
+- Scene: 2
+  TargetRuleType: two features
+  KeyFeatures: color=blue; size=small
+  ShortKey: small blue
+- Scene: 3
+  TargetRuleType: multiple features
+  KeyFeatures: color=blue; count=2; orientation=tilted
+  ShortKey: two blue tilted cones
+- Scene: 4
+  TargetRuleType: spatial conditioning
+  KeyFeatures: relation=stacked; color=different
+  ShortKey: stacked cones of different colors
+- Scene: 5
+  TargetRuleType: "relative quantity OR two features"
+  KeyFeatures: "color=red; quantity=most OR color=green; quantity=2"
+  ShortKey: "more red than any other color OR only two greens"
