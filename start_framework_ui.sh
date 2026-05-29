@@ -12,4 +12,4 @@ echo "Press Ctrl+C to stop the server"
 echo "=================================================="
 echo ""
 
-python src/inductive_ta/ui/app_framework.py
+python src/inductive_ta/ui/app_framework.py --config config/config_demo.yaml

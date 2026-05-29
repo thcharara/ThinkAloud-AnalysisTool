@@ -17,8 +17,9 @@ from enum import Enum
 # ============================================================================
 
 class Operation(str, Enum):
+    ORIENT = "ORIENT"
     OBSERVE_DESCRIBE = "OBSERVE_DESCRIBE"
-    COMPARE_CONTRAST = "COMPARE_CONTRAST"
+    INFERENCE = "INFERENCE"
     HYPOTHESIZE = "HYPOTHESIZE"
     TEST_SEEK_EVIDENCE = "TEST_SEEK_EVIDENCE"
     EVALUATE_REVISE = "EVALUATE_REVISE"
@@ -32,6 +33,7 @@ class Operation(str, Enum):
 
 class StepTag(str, Enum):
     STEP_OBS = "STEP_OBS"
+    STEP_INFERENCE = "STEP_INFERENCE"
     STEP_HYP = "STEP_HYP"
     STEP_TEST_CONFIRM = "STEP_TEST_CONFIRM"
     STEP_TEST_DISCONFIRM = "STEP_TEST_DISCONFIRM"
@@ -62,8 +64,10 @@ class Confidence(str, Enum):
 # ============================================================================
 
 class StrategyCode(str, Enum):
-    SearchMode_BreadthFirst = "SearchMode_BreadthFirst"
-    SearchMode_DepthFirst = "SearchMode_DepthFirst"
+    SearchMode_featureBreadth = "SearchMode_featureBreadth"
+    SearchMode_panelBreadth = "SearchMode_panelBreadth"
+    SearchMode_featureDepth = "SearchMode_featureDepth"
+    SearchMode_panelDepth = "SearchMode_panelDepth"
     HypMgmt_SingleTrack = "HypMgmt_SingleTrack"
     HypMgmt_Parallel = "HypMgmt_Parallel"
     HypMgmt_Elimination = "HypMgmt_Elimination"
@@ -202,24 +206,6 @@ class SceneKey(BaseModel):
         """Parse KeyFeatures into list of tokens."""
         return [f.strip() for f in self.KeyFeatures.split(';')]
 
-
-# ============================================================================
-# Legacy models (for backward compatibility)
-
-# Inline span model for manual micro-unit coding without hard turn boundaries
-class InlineSpan(BaseModel):
-    span_id: str  # e.g., P01_S1_SP3
-    participant_id: str
-    scene: int
-    start: int  # character start within scene text
-    end: int    # character end within scene text (exclusive)
-    text: str
-    # Codes
-    A_operation: Optional[str] = None
-    B_content: List[str] = Field(default_factory=list)
-    step_tag: Optional[str] = None
-    notes: str = ""
-# ============================================================================
 
 class SceneChunk(BaseModel):
     participant_id: str

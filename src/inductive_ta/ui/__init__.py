@@ -1,6 +1,5 @@
-"""User interface package for manual transcript coding."""
+"""User interface package for manual transcript coding.
 
-from .app import create_app
-
-__all__ = ["create_app"]
-
+The interactive coder is a standalone Flask app in ``app_framework.py``; run it
+via ``./run_demo.sh``, ``./run_research.sh``, or ``python tasks.py ui``.
+"""

@@ -754,39 +754,13 @@ function applyMicroCodes() {
         return;
     }
 
-    // Collect Tier B codes
+    // Collect Tier B codes: every checked input (checkbox or radio) in the Tier B
+    // section, by value. Codebook-agnostic — works for whatever groups the codebook
+    // defines, and counts each selection once.
     const tierBCodes = [];
-
-    // Feature families
-    document.querySelectorAll('.b-checkbox-group input[type="checkbox"]:checked').forEach(cb => {
-        tierBCodes.push(cb.value);
+    document.querySelectorAll('.tier-b-section input:checked').forEach(input => {
+        tierBCodes.push(input.value);
     });
-
-    // Polarity
-    const polarityRadio = document.querySelector('input[name="polarity"]:checked');
-    if (polarityRadio) tierBCodes.push(polarityRadio.value);
-
-    // Evidence type
-    const evidenceRadio = document.querySelector('input[name="evidence-type"]:checked');
-    if (evidenceRadio) tierBCodes.push(evidenceRadio.value);
-
-    // Abstraction
-    const abstractionRadio = document.querySelector('input[name="abstraction"]:checked');
-    if (abstractionRadio) tierBCodes.push(abstractionRadio.value);
-
-    // Confidence
-    const confidenceRadio = document.querySelector('input[name="confidence"]:checked');
-    if (confidenceRadio) tierBCodes.push(confidenceRadio.value);
-
-    // Meta Type (B7)
-    const metaTypeRadio = document.querySelector('input[name="meta-type"]:checked');
-    if (metaTypeRadio) tierBCodes.push(metaTypeRadio.value);
-
-    // Error types
-    document.querySelectorAll('.b-checkbox-group input[data-code^="ERROR_"]:checked').forEach(cb => {
-        tierBCodes.push(cb.value);
-    });
-
     state.currentUnit.B_content = tierBCodes;
 
     // Save notes
@@ -813,14 +787,9 @@ function clearCodingForm() {
         btn.classList.remove('active');
     });
 
-    // Clear all Tier B checkboxes
-    document.querySelectorAll('.b-checkbox-group input[type="checkbox"]').forEach(cb => {
-        cb.checked = false;
-    });
-
-    // Clear all Tier B radio buttons
-    document.querySelectorAll('.b-radio-group input[type="radio"]').forEach(radio => {
-        radio.checked = false;
+    // Clear all Tier B selections
+    document.querySelectorAll('.tier-b-section input').forEach(input => {
+        input.checked = false;
     });
 
     // Clear notes
@@ -843,24 +812,11 @@ function populateMicroForm(unit) {
         btn.classList.toggle('active', btn.dataset.code === unit.step_tag);
     });
 
-    // Clear all Tier B selections
-    document.querySelectorAll('.b-checkbox-group input[type="checkbox"]').forEach(cb => {
-        cb.checked = false;
+    // Set Tier B codes: check exactly the inputs whose value is in B_content.
+    const bContent = Array.isArray(unit.B_content) ? unit.B_content : [];
+    document.querySelectorAll('.tier-b-section input').forEach(input => {
+        input.checked = bContent.includes(input.value);
     });
-    document.querySelectorAll('.b-radio-group input[type="radio"]').forEach(radio => {
-        radio.checked = false;
-    });
-
-    // Set Tier B codes
-    if (unit.B_content && Array.isArray(unit.B_content)) {
-        unit.B_content.forEach(code => {
-            const checkbox = document.querySelector(`.b-checkbox-group input[value="${code}"]`);
-            if (checkbox) checkbox.checked = true;
-
-            const radio = document.querySelector(`.b-radio-group input[value="${code}"]`);
-            if (radio) radio.checked = true;
-        });
-    }
 
     // Load notes
     const notesField = document.getElementById('micro-notes');
@@ -959,7 +915,7 @@ window.removeFeatureToken = function(index) {
     renderFeatureTokens(state.currentUnit.FeatureBundle);
 };
 
-function calculateDistance() {
+async function calculateDistance() {
     if (!state.currentUnit || state.currentMode !== 'meso') {
         alert('Please select an episode first');
         return;
@@ -970,59 +926,28 @@ function calculateDistance() {
         return;
     }
 
-    const episodeFeatures = state.currentUnit.FeatureBundle;
-    const groundTruthFeatures = state.sceneKey.KeyFeatures.split(';');
-
-    // Parse ground truth
-    const gtFamilies = {};
-    groundTruthFeatures.forEach(f => {
-        const [family, value] = f.split('=');
-        gtFamilies[family] = value;
-    });
-
-    // Parse episode features
-    const epFamilies = {};
-    episodeFeatures.forEach(f => {
-        const [family, value] = f.split('=');
-        epFamilies[family] = value;
-    });
-
-    // Calculate distance
-    const gtKeys = Object.keys(gtFamilies);
-    const epKeys = Object.keys(epFamilies);
-
-    // Exact match: all GT families present with correct values
-    const exactMatch = gtKeys.every(k => epFamilies[k] === gtFamilies[k]);
-    if (exactMatch && gtKeys.length === epKeys.length) {
-        state.currentUnit.DistanceToTruth = 'ExactMatch';
-        document.getElementById('meso-distance').value = 'ExactMatch';
-        showDistanceBreakdown('ExactMatch', 'All required features match exactly!');
-        return;
+    // Scoring is authoritative on the server (distance_calculator.py) so it stays
+    // consistent with batch re-scoring; we just send the feature bundle.
+    try {
+        const response = await fetch('/api/calculate-distance', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                scene: state.scene,
+                FeatureBundle: state.currentUnit.FeatureBundle || []
+            })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            alert(`Distance calculation failed: ${response.status} - ${JSON.stringify(data)}`);
+            return;
+        }
+        state.currentUnit.DistanceToTruth = data.distance;
+        document.getElementById('meso-distance').value = data.distance;
+        showDistanceBreakdown(data.distance, data.explanation);
+    } catch (error) {
+        alert('Distance calculation failed: ' + error.message);
     }
-
-    // Family match partial: at least one GT family present
-    const hasOverlap = gtKeys.some(k => k in epFamilies);
-    const hasMissingKey = gtKeys.some(k => !(k in epFamilies));
-
-    if (hasOverlap && hasMissingKey) {
-        state.currentUnit.DistanceToTruth = 'FamilyMatch_Partial';
-        document.getElementById('meso-distance').value = 'FamilyMatch_Partial';
-        showDistanceBreakdown('FamilyMatch_Partial', 'Some correct families, but missing key dimensions.');
-        return;
-    }
-
-    // Family mismatch: no overlap
-    if (!hasOverlap) {
-        state.currentUnit.DistanceToTruth = 'FamilyMismatch';
-        document.getElementById('meso-distance').value = 'FamilyMismatch';
-        showDistanceBreakdown('FamilyMismatch', 'No overlap with required feature families.');
-        return;
-    }
-
-    // Default to rule form mismatch
-    state.currentUnit.DistanceToTruth = 'RuleFormMismatch';
-    document.getElementById('meso-distance').value = 'RuleFormMismatch';
-    showDistanceBreakdown('RuleFormMismatch', 'Structure mismatch (relational vs atomic).');
 }
 
 function showDistanceBreakdown(category, explanation) {
@@ -1181,20 +1106,15 @@ function setupKeyboardShortcuts() {
             redo();
         }
 
-        // Tier A shortcuts (1-8)
-        if (state.currentMode === 'micro' && e.key >= '1' && e.key <= '8') {
-            const operations = [
-                'ORIENT',
-                'OBSERVE_DESCRIBE',
-                'COMPARE_CONTRAST',
-                'HYPOTHESIZE',
-                'TEST_SEEK_EVIDENCE',
-                'EVALUATE_REVISE',
-                'META_COGNITION',
-                'RESPONSE_ENTRY'
-            ];
-            const code = operations[parseInt(e.key) - 1];
-            selectOperationCode(code);
+        // Tier A shortcuts: number keys map to the operation cards in DOM order.
+        // The cards are rendered from the codebook, so this auto-follows whatever
+        // operations (and order) the codebook defines — no hardcoded list to drift.
+        if (state.currentMode === 'micro' && e.key >= '1' && e.key <= '9') {
+            const cards = document.querySelectorAll('.operation-card');
+            const idx = parseInt(e.key) - 1;
+            if (idx < cards.length) {
+                selectOperationCode(cards[idx].dataset.code);
+            }
         }
     });
 }
@@ -1205,12 +1125,40 @@ function setupSaveButtons() {
     document.getElementById('btn-undo').addEventListener('click', undo);
     document.getElementById('btn-redo').addEventListener('click', redo);
 
+    const matricesBtn = document.getElementById('btn-export-matrices');
+    if (matricesBtn) matricesBtn.addEventListener('click', exportMatrices);
+    const snapshotBtn = document.getElementById('btn-export-snapshot');
+    if (snapshotBtn) snapshotBtn.addEventListener('click', downloadSnapshot);
+
     // Autosave every 30 seconds
     setInterval(() => {
         if (state.isDirty) {
             saveAll();
         }
     }, 30000);
+}
+
+async function exportMatrices() {
+    // Save any pending edits first so the matrices reflect the latest coding.
+    if (state.isDirty) await saveAll();
+    try {
+        const response = await fetch('/api/export/matrices', { method: 'POST' });
+        const data = await response.json();
+        if (response.ok && data.success) {
+            alert('Matrices written to the exports folder:\n• feature_attention_by_scene.csv\n• evidence_policy_by_outcome.csv');
+        } else {
+            alert(`Matrix export failed: ${response.status} - ${JSON.stringify(data)}`);
+        }
+    } catch (error) {
+        alert('Matrix export failed: ' + error.message);
+    }
+}
+
+async function downloadSnapshot() {
+    // Save any pending edits first so the snapshot is complete.
+    if (state.isDirty) await saveAll();
+    // Triggers a file download of the zipped JSONL exports.
+    window.location = '/api/export/snapshot';
 }
 
 async function saveAll() {
@@ -1298,16 +1246,7 @@ function showHelpModal(topic) {
             <p>Select exactly <strong>ONE</strong> operation for each turn. These are the fundamental reasoning operations.</p>
 
             <h4>Quick Reference:</h4>
-            <ul>
-                <li><strong>ORIENT (1):</strong> Initial task framing, reading instructions</li>
-                <li><strong>OBSERVE_DESCRIBE (2):</strong> Pure description, no inference</li>
-                <li><strong>INFERENCE (3):</strong> Pattern-seeking, comparison, preliminary reasoning</li>
-                <li><strong>HYPOTHESIZE (4):</strong> Proposes a candidate rule</li>
-                <li><strong>TEST_SEEK_EVIDENCE (5):</strong> Checks hypothesis against panels</li>
-                <li><strong>EVALUATE_REVISE (6):</strong> Accepts/rejects/revises hypothesis</li>
-                <li><strong>META_COGNITION (7):</strong> Reflects on difficulty or strategy</li>
-                <li><strong>RESPONSE_ENTRY (8):</strong> Commits final answer</li>
-            </ul>
+            <ul id="tier-a-quickref"></ul>
 
             <h4>Decision Rules:</h4>
             <ul>
@@ -1689,6 +1628,20 @@ function showHelpModal(topic) {
     };
 
     body.innerHTML = helpContent[topic] || `<p>Help content for ${topic} not yet available.</p>`;
+
+    // Build the Tier A "Quick Reference" from the rendered operation cards so it
+    // always reflects the codebook (single source of truth) rather than a copy.
+    if (topic === 'tier-a') {
+        const ref = document.getElementById('tier-a-quickref');
+        if (ref) {
+            ref.innerHTML = Array.from(document.querySelectorAll('.operation-card')).map((card, i) => {
+                const code = card.dataset.code;
+                const def = (card.querySelector('.op-definition')?.textContent || '').trim();
+                return `<li><strong>${code} (${i + 1}):</strong> ${def}</li>`;
+            }).join('');
+        }
+    }
+
     modal.classList.add('active');
 }
 

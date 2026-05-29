@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -50,40 +51,27 @@ def queries() -> None:
     """Run quick aggregate queries over exports."""
     console.print("[cyan]Running aggregate queries...[/cyan]")
     from inductive_ta.queries import run_all
-    run_all(Path("05_exports"))
+
+    # Use demo_exports when config.yaml is absent; fall back to exports/ for research mode.
+    exports_path = (
+        PROJECT_ROOT / "exports"
+        if (PROJECT_ROOT / "config" / "config.yaml").exists()
+        else PROJECT_ROOT / "demo_exports"
+    )
+    run_all(exports_path)
     console.print("[green]Queries complete.[/green]")
 
 
 @app.command()
 def ui(
+    config: str = "config/config_demo.yaml",
     host: str = "127.0.0.1",
-    port: int = 5001,
+    port: int = 5002,
     debug: bool = False,
-    check_only: bool = False,
 ) -> None:
     """Launch the interactive coding UI."""
-    from inductive_ta.ui import create_app
-
-    flask_app = create_app()
-
-    if check_only:
-        console.print("[cyan]Running self-check for UI routes...[/cyan]")
-        client = flask_app.test_client()
-        index_resp = client.get("/")
-        participant_resp = client.get("/participant/P01")
-        if index_resp.status_code != 200:
-            console.print("[red]Index route check failed[/red]")
-            raise typer.Exit(code=1)
-        if participant_resp.status_code != 200:
-            console.print("[red]Participant route check failed[/red]")
-            raise typer.Exit(code=1)
-        console.print("[green]UI routes loaded successfully. You can now run without --check-only.[/green]")
-        raise typer.Exit(code=0)
-
-    console.print(f"[cyan]Starting UI on http://{host}:{port} ...[/cyan]")
-
-    import socket
     import errno
+    import socket
 
     try:
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -91,36 +79,37 @@ def ui(
         probe.bind((host, port))
         probe.close()
     except OSError as exc:
-        if exc.errno == errno.EPERM:
-            console.print(
-                "[red]Unable to bind to the port due to operating-system restrictions (permission denied).[/red]"
-            )
-            console.print(
-                "[yellow]If you are running inside a restricted environment, rerun with --check-only to verify the UI, or run on your local machine/VS Code outside the sandbox.[/yellow]"
-            )
-            raise typer.Exit(code=1)
         if exc.errno == errno.EADDRINUSE:
-            console.print(
-                f"[red]Port {port} is already in use. Choose another port with --port.[/red]"
-            )
+            console.print(f"[red]Port {port} is already in use.[/red]")
             raise typer.Exit(code=1)
         raise
 
-    flask_app.run(host=host, port=port, debug=debug, use_reloader=False)
+    console.print(f"[cyan]Starting UI on http://{host}:{port} ...[/cyan]")
+    cmd = [
+        sys.executable,
+        str(PROJECT_ROOT / "src" / "inductive_ta" / "ui" / "app_framework.py"),
+        "--config", config,
+        "--port", str(port),
+    ]
+    if debug:
+        cmd.append("--debug")
+    result = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
+    raise typer.Exit(code=result.returncode)
 
 
 @app.command()
 def clean() -> None:
     """Remove generated exports and figures."""
-    targets = [Path("05_exports"), Path("06_figures")]
+    targets = [PROJECT_ROOT / "demo_exports", PROJECT_ROOT / "exports"]
     removed = 0
 
     for target in targets:
         if not target.exists():
-            console.print(f"[yellow]Directory not found: {target}[/yellow]")
             continue
 
         for child in target.iterdir():
+            if child.name == ".gitkeep":
+                continue
             try:
                 if child.is_dir():
                     shutil.rmtree(child)
@@ -131,7 +120,7 @@ def clean() -> None:
                 console.print(f"[red]Failed to remove {child}: {exc}[/red]")
 
     if removed:
-        console.print(f"[green]Removed {removed} items from exports/figures directories.[/green]")
+        console.print(f"[green]Removed {removed} item(s) from exports directories.[/green]")
     else:
         console.print("[cyan]Nothing to clean.[/cyan]")
 
@@ -139,11 +128,17 @@ def clean() -> None:
 @app.command()
 def purge_turns() -> None:
     """Remove automatically-generated turn exports to enforce inline-only workflow."""
-    path = Path("05_exports/corpus_enriched.jsonl")
-    if path.exists():
-        path.unlink()
-        console.print("[green]Removed 05_exports/corpus_enriched.jsonl[/green]")
-    else:
+    candidates = [
+        PROJECT_ROOT / "demo_exports" / "corpus_enriched.jsonl",
+        PROJECT_ROOT / "exports" / "corpus_enriched.jsonl",
+    ]
+    removed = False
+    for path in candidates:
+        if path.exists():
+            path.unlink()
+            console.print(f"[green]Removed {path.relative_to(PROJECT_ROOT)}[/green]")
+            removed = True
+    if not removed:
         console.print("[cyan]No corpus_enriched.jsonl found; nothing to purge.[/cyan]")
 
 

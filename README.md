@@ -24,7 +24,7 @@ python src/inductive_ta/ui/app_framework.py --config config/config_demo.yaml
 Open <http://127.0.0.1:5002> and click a participant (P00/P01). You will see the **coding workspace**:
 
 1. Click a turn in the transcript
-2. Apply Tier A operation (keyboard shortcuts 1-7)
+2. Apply Tier A operation (keyboard shortcuts 1-8)
 3. Add Tier B codes and step tags
 4. Create episodes for hypothesis-testing sequences
 5. All data saves to `demo_exports/` (safe to delete anytime)
@@ -80,7 +80,7 @@ When you bring your own corpus, keep it out of Git or use a private repo.
    paths:
      transcripts_dir: clean_transcripts  # Your participant files
      exports_dir: exports                # Your coding work
-     ground_truth: ground_truth/SceneKeys.csv  # Optional
+     ground_truth: ground_truth/SceneKeys.yaml  # Optional
    ```
 
 2. **Prepare transcripts** (UTF-8 text files):
@@ -89,8 +89,8 @@ When you bring your own corpus, keep it out of Git or use a private repo.
    - Optional tags: `[READING]`, `[THINKING]`, `[TYPING]`
 
 3. **Ground truth (optional):**
-   - If you have correct answers, create a CSV matching `demo_data/ground_truth/SceneKeys.csv` format
-   - If not, omit the `ground_truth` path—Distance-to-Truth won't work, but all other features remain functional
+   - If you have correct answers, create a YAML file matching `demo_data/ground_truth/SceneKeys.yaml` format
+   - If not, omit the `ground_truth` path—Distance-to-Truth is disabled, but all other features remain functional
 
 4. **Run with your data:**
    ```bash
@@ -121,11 +121,11 @@ python src/inductive_ta/ui/app_framework.py --config config/config.yaml
 
 ## Features
 
-- **Inline span coding:** highlight raw transcript text to create coded micro-units.
+- **Highlight-based coding:** select raw transcript text to create coded micro-units (turns) and meso-units (episodes).
 - **Flexible codebook:** swap `codebook/codebook.yaml` for any Tier A/B/C schema (run `python -m src.inductive_ta.tools_codebook validate`).
-- **Scene summary dashboard:** view counts of operations, step tags, feature families, evidence policies, outcomes, and step transitions.
-- **Matrix & snapshot exports:** toolbar buttons generate feature-by-scene matrices and download zipped JSONL snapshots for archival.
-- **Audit trail:** `CHANGELOG.jsonl` records every change (span add/delete, turn edits, episodes).
+- **Distance-to-Truth:** episodes are scored against optional ground truth at feature-family granularity (Exact / Partial / Mismatch); omit ground truth and every other feature still works.
+- **Matrix & snapshot exports:** toolbar buttons generate feature-by-scene matrices (CSV) and download a zipped JSONL snapshot for archival.
+- **Audit trail:** `CHANGELOG.jsonl` records every save (turns and episodes).
 - **Demo friendly:** no proprietary data; includes synthetic transcripts + ground truth for trying the UI immediately.
 - **Codespaces ready:** optional development container included (see below).
 

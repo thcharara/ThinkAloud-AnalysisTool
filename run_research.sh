@@ -15,4 +15,14 @@ echo "To try the demo instead, use: ./run_demo.sh"
 echo "============================================================"
 echo ""
 
+if [ ! -f config/config.yaml ]; then
+  echo "config/config.yaml not found."
+  echo ""
+  echo "Create it from the template, then point it at your data:"
+  echo "  cp config/config_demo.yaml config/config.yaml"
+  echo ""
+  echo "Or run ./run_demo.sh to try the tool with synthetic data first."
+  exit 1
+fi
+
 python src/inductive_ta/ui/app_framework.py --config config/config.yaml

@@ -1,12 +1,13 @@
 meta:
   name: "Inductive Think-Aloud Codebook"
-  version: "1.0.0"
+  version: "2.0.0"
   description: "Three-tier qualitative codebook with step-tags and episode fields."
 
 tiers:
   A_Operations:
+    ORIENT: "Initial orientation and task framing."
     OBSERVE_DESCRIBE: "Pure description of visible features; no inference."
-    COMPARE_CONTRAST: "Explicit comparison across panels/options."
+    INFERENCE: "Pattern-seeking, comparison, or preliminary reasoning."
     HYPOTHESIZE: "Proposes a candidate rule (explicit or implicit)."
     TEST_SEEK_EVIDENCE: "Checks candidate against panels; cites cases."
     EVALUATE_REVISE: "Evaluates, revises, weakens, or abandons the hypothesis."
@@ -49,8 +50,10 @@ tiers:
       Scope_Mismatch: "Treats correlate as cause; wrong scope."
       Attribute_Confusion: "Mixes/omits key attributes (e.g., size)."
   C_Strategy:
-    SearchMode_BreadthFirst: "Scans many features quickly."
-    SearchMode_DepthFirst: "Locks into one feature and tests deeply."
+    SearchMode_featureBreadth: "Scans many features quickly (breadth across features)."
+    SearchMode_panelBreadth: "Scans many panels quickly (breadth across panels)."
+    SearchMode_featureDepth: "Examines one feature deeply across panels."
+    SearchMode_panelDepth: "Examines one panel deeply across features."
     HypMgmt_SingleTrack: "Pursues one idea at a time."
     HypMgmt_Parallel: "Holds multiple competing ideas."
     HypMgmt_Elimination: "Systematic elimination."
@@ -66,6 +69,7 @@ tiers:
 
 step_tags:
   STEP_OBS: "Observation"
+  STEP_INFERENCE: "Pattern-seeking or comparison before a hypothesis"
   STEP_HYP: "Hypothesis proposal"
   STEP_TEST_CONFIRM: "Test with confirming evidence"
   STEP_TEST_DISCONFIRM: "Test with disconfirming evidence"

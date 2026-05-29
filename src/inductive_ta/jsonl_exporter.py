@@ -10,8 +10,8 @@ Exports:
 import json
 from pathlib import Path
 from typing import List
-from datetime import datetime
-from .models import Turn, Episode, InlineSpan
+from datetime import datetime, timezone
+from .models import Turn, Episode
 
 
 class JSONLExporter:
@@ -31,7 +31,6 @@ class JSONLExporter:
         self.corpus_path = self.exports_dir / "corpus_enriched.jsonl"
         self.episodes_path = self.exports_dir / "episodes.jsonl"
         self.changelog_path = self.exports_dir / "CHANGELOG.jsonl"
-        self.spans_path = self.exports_dir / "inline_spans.jsonl"
 
     def export_turns(self, turns: List[Turn], mode: str = 'w') -> None:
         """
@@ -82,7 +81,7 @@ class JSONLExporter:
             notes: Optional notes
         """
         change_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             "participant_id": participant_id,
             "scene": scene,
             "action_type": action_type,
@@ -140,42 +139,6 @@ class JSONLExporter:
                     continue
                 episodes.append(Episode(**episode_dict))
         return episodes
-
-    # ----------------- Inline span helpers -----------------
-    def load_spans(self) -> List[InlineSpan]:
-        if not self.spans_path.exists():
-            return []
-        spans: List[InlineSpan] = []
-        with open(self.spans_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                raw = line.strip()
-                if not raw:
-                    continue
-                try:
-                    data = json.loads(raw)
-                except json.JSONDecodeError:
-                    continue
-                spans.append(InlineSpan(**data))
-        return spans
-
-    def load_spans_for_participant_scene(self, participant_id: str, scene: int) -> List[InlineSpan]:
-        spans = self.load_spans()
-        return [s for s in spans if s.participant_id == participant_id and s.scene == scene]
-
-    def _write_spans(self, spans: List[InlineSpan]) -> None:
-        with open(self.spans_path, 'w', encoding='utf-8') as f:
-            for span in spans:
-                f.write(json.dumps(span.model_dump(), ensure_ascii=False) + '\n')
-
-    def add_span(self, span: InlineSpan) -> None:
-        spans = self.load_spans()
-        spans.append(span)
-        self._write_spans(spans)
-
-    def delete_span(self, span_id: str) -> None:
-        spans = self.load_spans()
-        spans = [s for s in spans if s.span_id != span_id]
-        self._write_spans(spans)
 
     def load_turns_for_participant_scene(self, participant_id: str, scene: int) -> List[Turn]:
         """
@@ -262,7 +225,7 @@ class JSONLExporter:
         """
         Export a structured JSON file per participant/scene with full code labels.
 
-        Creates: 02_annotations/{participant_id}_scene{scene}_coded.json
+        Creates: {exports_dir}/structured_json/{participant_id}_scene{scene}_coded.json
 
         Format similar to:
         {
@@ -288,8 +251,8 @@ class JSONLExporter:
             turns: List of Turn objects
             codebook: Optional codebook dict for label lookups
         """
-        # Create annotations directory
-        annotations_dir = self.exports_dir.parent / "02_annotations"
+        # Keep structured JSON inside the configured exports directory
+        annotations_dir = self.exports_dir / "structured_json"
         annotations_dir.mkdir(parents=True, exist_ok=True)
 
         # Build structured data

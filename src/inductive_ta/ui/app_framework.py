@@ -1,19 +1,19 @@
 """
-Framework-compliant Flask app for Inductive Think-Aloud coding.
+Flask app for the Inductive Think-Aloud coding tool.
 
-Implements:
-- Tri-pane layout (Navigator | Transcript | Coding Sidebar)
-- Turn-based coding (not word-selection)
-- Three-tier codebook (A: Operations, B: Content, C: Strategy)
-- Episode scaffolding with all required fields
-- Ground truth integration with distance-to-truth
-- JSONL exports (corpus_enriched.jsonl, episodes.jsonl)
-- Audit trail (CHANGELOG.jsonl)
+Serves the highlight-based coding workspace (``/code-v2``) where a researcher:
+- selects raw transcript text to create micro units (turns) and meso units (episodes),
+- applies three-tier codes (A: Operations, B: Content, C: Strategy) + step tags,
+- sees Distance-to-Truth scored against optional ground truth,
+- exports feature-by-scene matrices and a zipped JSONL snapshot.
+
+All coding is persisted via JSONLExporter to the configured exports directory
+(corpus_enriched.jsonl, episodes.jsonl, structured_json/, CHANGELOG.jsonl).
 """
 
 import io
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Flask, render_template, jsonify, request, send_file
 from pathlib import Path
@@ -23,12 +23,9 @@ import sys
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.inductive_ta.project_loader import ProjectLoader
-from src.inductive_ta.turn_parser import TurnParser
-from src.inductive_ta.distance_calculator import DistanceCalculator
-from src.inductive_ta.jsonl_exporter import JSONLExporter, export_to_csv_matrices
-from src.inductive_ta.models import Turn, Episode, InlineSpan
-from src.inductive_ta.analytics import suggest_turn_codes, compute_scene_statistics
+from src.inductive_ta.distance_calculator import DistanceCalculator  # noqa: E402
+from src.inductive_ta.jsonl_exporter import export_to_csv_matrices  # noqa: E402
+from src.inductive_ta.models import Turn, Episode  # noqa: E402
 
 app = Flask(__name__)
 app.config['JSON_SORT_KEYS'] = False
@@ -72,541 +69,25 @@ def index():
 
 
 # ============================================================================
-# Coder Workspace (Tri-pane layout)
-# ============================================================================
-
-@app.route('/code/<participant_id>/<int:scene>')
-def coder_workspace(participant_id: str, scene: int):
-    """
-    Main coding interface with tri-pane layout.
-
-    Left: Navigator (participants/scenes)
-    Center: Transcript view (turns with episode bands)
-    Right: Coding sidebar (Tier A/B/C, step-tags, episode editor)
-    """
-    # Load participant's scene data
-    scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
-    if not scene_data:
-        return f"Scene {scene} not found for {participant_id}", 404
-
-    # Load existing codes from JSONL if available
-    existing_turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
-    existing_episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
-
-    # Merge existing codes into parsed turns
-    if existing_turns:
-        turn_dict = {t.turn_index: t for t in existing_turns}
-        for turn in scene_data.turns:
-            if turn.turn_index in turn_dict:
-                existing = turn_dict[turn.turn_index]
-                turn.A_operation = existing.A_operation
-                turn.B_content = existing.B_content
-                turn.step_tag = existing.step_tag
-                turn.notes = existing.notes
-
-    # Add episodes to scene_data
-    scene_data.episodes = existing_episodes
-
-    # Load codebook and ground truth
-    codebook = app.config["loader"].load_codebook()
-    scene_key = app.config["loader"].get_scene_key(scene)
-
-    # Get all participants for navigator
-    all_participants = app.config["turn_parser"].get_participant_ids()
-
-    # Convert turns and episodes to dicts for JSON serialization
-    turns_data = [turn.model_dump() for turn in scene_data.turns]
-    episodes_data = [episode.model_dump() for episode in scene_data.episodes]
-
-    return render_template(
-        'framework/coder.html',
-        participant_id=participant_id,
-        scene=scene,
-        scene_data=scene_data,
-        scene_key=scene_key,
-        codebook=codebook,
-        all_participants=all_participants,
-        turns_json=turns_data,
-        episodes_json=episodes_data
-    )
-
-
-# ============================================================================
-# Inline Coding Workspace (no auto turns)
-# ============================================================================
-
-@app.route('/inline/<participant_id>/<int:scene>')
-def inline_coder(participant_id: str, scene: int):
-    """Inline span coding view: renders raw scene text and allows span-level coding."""
-    # Load scene raw text using TurnParser split (but do not create turn objects)
-    all_scenes = app.config["turn_parser"].parse_participant(participant_id)
-    scene_data = next((s for s in all_scenes if s.scene == scene), None)
-    if not scene_data:
-        return f"Scene {scene} not found for {participant_id}", 404
-
-    # Reconstruct scene text by concatenating original lines in that scene
-    # app.config["turn_parser"]._split_into_scenes already preserved raw lines; here we rebuild from transcript file
-    transcript_path = app.config["turn_parser"].transcripts_dir / f"{participant_id}.txt"
-    raw = transcript_path.read_text(encoding='utf-8', errors='replace')
-    # Compute scene chunks with the parser regex
-    chunks = {}
-    text = raw
-    matches = list(app.config["turn_parser"].scene_regex.finditer(text))
-    for idx, m in enumerate(matches):
-        num = int(m.group('num'))
-        start = m.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
-        chunks[num] = text[start:end]
-    scene_text = chunks.get(scene, '')
-
-    # Load existing spans for this scene
-    spans = app.config["exporter"].load_spans_for_participant_scene(participant_id, scene)
-
-    codebook = app.config["loader"].load_codebook()
-    scene_key = app.config["loader"].get_scene_key(scene)
-    all_participants = app.config["turn_parser"].get_participant_ids()
-
-    return render_template(
-        'framework/inline.html',
-        participant_id=participant_id,
-        scene=scene,
-        scene_text=scene_text,
-        spans_json=[s.model_dump() for s in spans],
-        codebook=codebook,
-        scene_key=scene_key,
-        all_participants=all_participants,
-    )
-
-
-# ============================================================================
-# API: Save Turn Codes
-# ============================================================================
-
-@app.post('/api/save-turn')
-def api_save_turn():
-    """
-    Save codes for a single turn.
-
-    Request JSON:
-    {
-        "participant_id": "P01",
-        "scene": 1,
-        "turn_index": 5,
-        "A_operation": "HYPOTHESIZE",
-        "B_content": ["COLOR_Blue", "SIZE_Small"],
-        "step_tag": "STEP_HYP",
-        "notes": ""
-    }
-    """
-    data = request.get_json()
-
-    participant_id = data['participant_id']
-    scene = data['scene']
-    turn_index = data['turn_index']
-
-    # Load scene turns
-    scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
-    if not scene_data:
-        return jsonify({'error': 'Scene not found'}), 404
-
-    # Find turn
-    turn = next((t for t in scene_data.turns if t.turn_index == turn_index), None)
-    if not turn:
-        return jsonify({'error': 'Turn not found'}), 404
-
-    # Log change for audit trail
-    before = {
-        'A_operation': turn.A_operation,
-        'B_content': turn.B_content,
-        'step_tag': turn.step_tag
-    }
-
-    # Update turn
-    turn.A_operation = data.get('A_operation')
-    turn.B_content = data.get('B_content', [])
-    turn.step_tag = data.get('step_tag')
-    turn.notes = data.get('notes', '')
-
-    after = {
-        'A_operation': turn.A_operation,
-        'B_content': turn.B_content,
-        'step_tag': turn.step_tag
-    }
-
-    # Export updated turns
-    app.config["exporter"].export_participant_scene(
-        participant_id, scene,
-        scene_data.turns,
-        scene_data.episodes
-    )
-
-    # Log to changelog
-    app.config["exporter"].log_change(
-        participant_id, scene,
-        action_type='update_turn',
-        before=before,
-        after=after,
-        notes=f"Turn {turn_index}"
-    )
-
-    return jsonify({'success': True})
-
-
-# ============================================================================
-# API: Create/Update Episode
-# ============================================================================
-
-@app.post('/api/save-episode')
-def api_save_episode():
-    """
-    Create or update an episode.
-
-    Request JSON:
-    {
-        "participant_id": "P01",
-        "scene": 1,
-        "episode_id": "P01_S1_EP0",  # or null for new episode
-        "episode_index": 0,
-        "turn_span_start": 10,
-        "turn_span_end": 25,
-        "HypothesisVerbatim": "I think it's the small blue cone",
-        "FeatureBundle": ["color=blue", "size=small"],
-        "EvidenceCited": "PositiveCases",
-        "Confidence": "Hedged",
-        "Outcome": "accepted",
-        "StrategyCodes": ["EvidencePolicy_Contrastive", "Complexity_Conjunctive"],
-        "DistanceToTruth": "ExactMatch",
-        "Notes": ""
-    }
-    """
-    data = request.get_json()
-
-    participant_id = data['participant_id']
-    scene = data['scene']
-    episode_id = data.get('episode_id')
-
-    # Load existing episodes
-    episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
-
-    # Find or create episode
-    if episode_id:
-        # Update existing
-        episode = next((e for e in episodes if e.episode_id == episode_id), None)
-        if not episode:
-            return jsonify({'error': 'Episode not found'}), 404
-    else:
-        # Create new
-        episode_index = len(episodes)
-        episode_id = f"{participant_id}_S{scene}_EP{episode_index}"
-        episode = Episode(
-            episode_id=episode_id,
-            participant_id=participant_id,
-            scene=scene,
-            episode_index=episode_index,
-            turn_span_start=data['turn_span_start'],
-            turn_span_end=data['turn_span_end']
-        )
-        episodes.append(episode)
-
-    # Update fields
-    episode.HypothesisVerbatim = data.get('HypothesisVerbatim', '')
-    episode.FeatureBundle = data.get('FeatureBundle', [])
-    episode.EvidenceCited = data.get('EvidenceCited')
-    episode.Confidence = data.get('Confidence')
-    episode.Outcome = data.get('Outcome')
-    episode.StrategyCodes = data.get('StrategyCodes', [])
-    episode.DistanceToTruth = data.get('DistanceToTruth')
-    episode.Notes = data.get('Notes', '')
-
-    # Load turns for export
-    turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
-    if not turns:
-        # Use parsed turns
-        scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
-        turns = scene_data.turns if scene_data else []
-
-    # Export
-    app.config["exporter"].export_participant_scene(participant_id, scene, turns, episodes)
-
-    # Log to changelog
-    app.config["exporter"].log_change(
-        participant_id, scene,
-        action_type='save_episode',
-        after={'episode_id': episode_id},
-        notes=f"Episode {episode_id}"
-    )
-
-    return jsonify({'success': True, 'episode_id': episode_id})
-
-
-# ============================================================================
-# API: Calculate Distance-to-Truth
-# ============================================================================
-
-@app.post('/api/calculate-distance')
-def api_calculate_distance():
-    """
-    Calculate distance-to-truth for an episode.
-
-    Request JSON:
-    {
-        "scene": 1,
-        "FeatureBundle": ["color=blue", "size=small"]
-    }
-
-    Response JSON:
-    {
-        "distance": "ExactMatch",
-        "explanation": "✅ Exact match: all required features present"
-    }
-    """
-    data = request.get_json()
-    scene = data['scene']
-    feature_bundle = data.get('FeatureBundle', [])
-
-    # Load ground truth
-    scene_key = app.config["loader"].get_scene_key(scene)
-    if not scene_key:
-        return jsonify({'error': 'Scene key not found'}), 404
-
-    # Create temporary episode for calculation
-    temp_episode = Episode(
-        episode_id="temp",
-        participant_id="temp",
-        scene=scene,
-        episode_index=0,
-        turn_span_start=0,
-        turn_span_end=0,
-        FeatureBundle=feature_bundle
-    )
-
-    # Calculate
-    calculator = DistanceCalculator(scene_key)
-    distance = calculator.calculate(temp_episode)
-    explanation = calculator.explain(temp_episode)
-
-    return jsonify({
-        'distance': distance.value,
-        'explanation': explanation
-    })
-
-
-# ============================================================================
-# API: Get Codebook Reference
-# ============================================================================
-
-@app.get('/api/codebook')
-def api_codebook():
-    """
-    Get full codebook with definitions.
-
-    Response includes:
-    - Tier A operations with descriptions
-    - Tier B content categories (B1-B6) with descriptions
-    - Tier C strategy codes with descriptions
-    - Step-tags with descriptions
-    """
-    codebook = app.config["loader"].load_codebook()
-
-    return jsonify({
-        'meta': codebook.meta,
-        'tier_a': codebook.get_tier_a_operations(),
-        'tier_b': codebook.get_tier_b_content(),
-        'tier_c': codebook.get_tier_c_strategy(),
-        'step_tags': codebook.step_tags
-    })
-
-
-# ============================================================================
-# API: Delete Episode
-# ============================================================================
-
-@app.delete('/api/delete-episode/<episode_id>')
-def api_delete_episode(episode_id: str):
-    """
-    Delete an episode.
-
-    Args:
-        episode_id: e.g., "P01_S1_EP2"
-    """
-    # Parse episode_id to get participant and scene
-    parts = episode_id.split('_')
-    if len(parts) < 3:
-        return jsonify({'error': 'Invalid episode_id format'}), 400
-
-    participant_id = parts[0]
-    scene = int(parts[1][1:])  # Remove 'S' prefix
-
-    # Load episodes
-    episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
-
-    # Find and remove
-    episodes = [e for e in episodes if e.episode_id != episode_id]
-
-    # Load turns
-    turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
-
-    # Export
-    app.config["exporter"].export_participant_scene(participant_id, scene, turns, episodes)
-
-    # Log
-    app.config["exporter"].log_change(
-        participant_id, scene,
-        action_type='delete_episode',
-        before={'episode_id': episode_id},
-        notes=f"Deleted {episode_id}"
-    )
-
-    return jsonify({'success': True})
-
-
-# ============================================================================
-# API: Suggestions & Scene Analytics
-# ============================================================================
-
-
-@app.post('/api/suggest')
-def api_suggest():
-    """Return heuristic suggestions for a single turn."""
-    data = request.get_json() or {}
-    text = data.get('text', '')
-    tag = data.get('tag')
-
-    if not text.strip():
-        return jsonify({'suggestions': {}})
-
-    suggestions = suggest_turn_codes(text, tag)
-    return jsonify({'suggestions': suggestions})
-
-
-@app.get('/api/scene-stats')
-def api_scene_stats():
-    """Aggregate statistics for a participant × scene."""
-    participant_id = request.args.get('participant_id')
-    scene = request.args.get('scene', type=int)
-
-    if not participant_id or scene is None:
-        return jsonify({'error': 'participant_id and scene are required'}), 400
-
-    turns = app.config["exporter"].load_turns_for_participant_scene(participant_id, scene)
-    episodes = app.config["exporter"].load_episodes_for_participant_scene(participant_id, scene)
-
-    # If no saved annotations yet, fall back to parsed turns for counts
-    if not turns:
-        scene_data = app.config["turn_parser"].load_participant_scene(participant_id, scene)
-        turns = scene_data.turns if scene_data else []
-        episodes = scene_data.episodes if scene_data else []
-
-    stats = compute_scene_statistics(turns, episodes)
-    return jsonify(stats)
-
-
-# ============================================================================
-# API: Export Helpers
-# ============================================================================
-
-
-@app.post('/api/export/matrices')
-def api_export_matrices():
-    """Generate matrix CSVs (feature attention, evidence policy)."""
-    turns = app.config["exporter"].load_turns()
-    episodes = app.config["exporter"].load_episodes()
-    export_to_csv_matrices(turns, episodes, app.config["exporter"].exports_dir)
-    timestamp = datetime.utcnow().isoformat() + 'Z'
-    return jsonify({'success': True, 'timestamp': timestamp})
-
-
-@app.get('/api/export/snapshot')
-def api_export_snapshot():
-    """Download a zip snapshot of current JSONL exports."""
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for filename in ['corpus_enriched.jsonl', 'episodes.jsonl', 'CHANGELOG.jsonl']:
-            path = app.config["exporter"].exports_dir / filename
-            if path.exists():
-                zf.write(path, arcname=filename)
-
-    buffer.seek(0)
-    download_name = f"thinkaloud_snapshot_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}.zip"
-    return send_file(buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
-
-
-# ============================================================================
-# API: Inline span CRUD
-# ============================================================================
-
-
-@app.post('/api/spans/add')
-def api_spans_add():
-    data = request.get_json() or {}
-    required = ['participant_id', 'scene', 'start', 'end', 'text']
-    if not all(k in data for k in required):
-        return jsonify({'error': 'Missing required fields'}), 400
-
-    participant_id = data['participant_id']
-    scene = int(data['scene'])
-    start = int(data['start'])
-    end = int(data['end'])
-    text = data['text']
-
-    span_id = f"{participant_id}_S{scene}_SP{start}"
-    span = InlineSpan(
-        span_id=span_id,
-        participant_id=participant_id,
-        scene=scene,
-        start=start,
-        end=end,
-        text=text,
-        A_operation=data.get('A_operation'),
-        B_content=data.get('B_content', []),
-        step_tag=data.get('step_tag'),
-        notes=data.get('notes', ''),
-    )
-    app.config["exporter"].add_span(span)
-    app.config["exporter"].log_change(participant_id, scene, action_type='add_span', after=span.model_dump(), notes='Inline span add')
-    return jsonify({'success': True, 'span': span.model_dump()})
-
-
-@app.delete('/api/spans/delete/<span_id>')
-def api_spans_delete(span_id: str):
-    # Best-effort: try to parse participant and scene for logging
-    try:
-        parts = span_id.split('_')
-        participant_id = parts[0]
-        scene = int(parts[1][1:])
-    except Exception:
-        participant_id, scene = 'NA', 0
-    app.config["exporter"].delete_span(span_id)
-    app.config["exporter"].log_change(participant_id, scene, action_type='delete_span', before={'span_id': span_id})
-    return jsonify({'success': True})
-
-
-@app.get('/api/spans/list')
-def api_spans_list():
-    participant_id = request.args.get('participant_id')
-    scene = request.args.get('scene', type=int)
-    if not participant_id or scene is None:
-        return jsonify({'error': 'participant_id and scene are required'}), 400
-    spans = app.config["exporter"].load_spans_for_participant_scene(participant_id, scene)
-    return jsonify({'spans': [s.model_dump() for s in spans]})
-
-
-# ============================================================================
-# V2 Coder: Text-Highlighting Based UI
+# Coding Workspace (text-highlighting based UI)
 # ============================================================================
 
 @app.route('/code-v2/<participant_id>/<int:scene>')
 def coder_v2(participant_id: str, scene: int):
     """
-    V2 coding interface with text highlighting for unit creation.
+    Coding interface with text highlighting for unit creation.
 
     Features:
     - Raw transcript display with text selection
-    - Create micro/meso/macro units by highlighting
+    - Create micro/meso units by highlighting
     - Clear operational definitions for all codes
-    - Visual when/how/why guidance
     - Workflow-driven coding process
     """
+    # Validate participant_id against the known participant list. This guards the
+    # transcript path interpolation below and yields a clean 404 for unknown ids.
+    if participant_id not in app.config["turn_parser"].get_participant_ids():
+        return f"Unknown participant: {participant_id}", 404
+
     # Load scene data
     all_scenes = app.config["turn_parser"].parse_participant(participant_id)
     scene_data = next((s for s in all_scenes if s.scene == scene), None)
@@ -668,10 +149,14 @@ def coder_v2(participant_id: str, scene: int):
     )
 
 
+# ============================================================================
+# API: Save Coding
+# ============================================================================
+
 @app.post('/api/save-coding')
-def api_save_coding_v2():
+def api_save_coding():
     """
-    Save coding data from V2 UI.
+    Save coding data from the workspace.
 
     Accepts both micro units (turns) and meso units (episodes).
     """
@@ -715,6 +200,35 @@ def api_save_coding_v2():
         episode = Episode(**unit_data)
         episodes.append(episode)
 
+    # Validate all codes against the loaded codebook before persisting. This is
+    # codebook-driven (not tied to a fixed enum), so it works for any custom
+    # codebook, and we reject up front so no partial/invalid data is written.
+    codebook = app.config["loader"].load_codebook()
+    valid_a = set(codebook.get_all_operation_codes())
+    valid_b = set(codebook.get_all_b_codes())
+    valid_step = set(codebook.get_all_step_tags())
+    valid_c = set(codebook.get_all_strategy_codes())
+
+    invalid = []
+    for t in turns:
+        if t.A_operation and t.A_operation not in valid_a:
+            invalid.append(f"A_operation '{t.A_operation}'")
+        for b in (t.B_content or []):
+            if b not in valid_b:
+                invalid.append(f"B_content '{b}'")
+        if t.step_tag and t.step_tag not in valid_step:
+            invalid.append(f"step_tag '{t.step_tag}'")
+    for e in episodes:
+        for s in (e.StrategyCodes or []):
+            if s not in valid_c:
+                invalid.append(f"StrategyCode '{s}'")
+
+    if invalid:
+        return jsonify({
+            'error': 'One or more codes are not defined in the codebook',
+            'invalid': sorted(set(invalid)),
+        }), 400
+
     # Export using the participant_scene method (handles JSONL updates correctly)
     if turns or episodes:
         app.config["exporter"].export_participant_scene(participant_id, scene, turns, episodes)
@@ -731,6 +245,71 @@ def api_save_coding_v2():
 
     return jsonify({'success': True, 'turns_saved': len(turns), 'episodes_saved': len(episodes)})
 
+
+# ============================================================================
+# API: Distance-to-Truth
+# ============================================================================
+
+@app.post('/api/calculate-distance')
+def api_calculate_distance():
+    """Score an episode's FeatureBundle against the scene's ground truth.
+
+    Authoritative scoring lives in distance_calculator.py so it stays testable
+    and reusable for batch re-scoring; the UI calls this rather than duplicating
+    the algorithm in JavaScript.
+    """
+    data = request.get_json() or {}
+    scene = data['scene']
+    feature_bundle = data.get('FeatureBundle', [])
+
+    scene_key = app.config["loader"].get_scene_key(scene)
+    if not scene_key:
+        return jsonify({'error': 'No ground truth for this scene'}), 404
+
+    temp_episode = Episode(
+        episode_id="temp", participant_id="temp", scene=scene,
+        episode_index=0, turn_span_start=0, turn_span_end=0,
+        FeatureBundle=feature_bundle,
+    )
+    calculator = DistanceCalculator(scene_key)
+    return jsonify({
+        'distance': calculator.calculate(temp_episode).value,
+        'explanation': calculator.explain(temp_episode),
+    })
+
+
+# ============================================================================
+# API: Export Helpers
+# ============================================================================
+
+@app.post('/api/export/matrices')
+def api_export_matrices():
+    """Generate matrix CSVs (feature attention, evidence policy)."""
+    turns = app.config["exporter"].load_turns()
+    episodes = app.config["exporter"].load_episodes()
+    export_to_csv_matrices(turns, episodes, app.config["exporter"].exports_dir)
+    timestamp = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    return jsonify({'success': True, 'timestamp': timestamp})
+
+
+@app.get('/api/export/snapshot')
+def api_export_snapshot():
+    """Download a zip snapshot of current JSONL exports."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for filename in ['corpus_enriched.jsonl', 'episodes.jsonl', 'CHANGELOG.jsonl']:
+            path = app.config["exporter"].exports_dir / filename
+            if path.exists():
+                zf.write(path, arcname=filename)
+
+    buffer.seek(0)
+    download_name = f"thinkaloud_snapshot_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.zip"
+    return send_file(buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
+
+
+# ============================================================================
+# Task images (one reference image per scene)
+# ============================================================================
 
 @app.route('/task-image/<int:scene>')
 def task_image(scene: int):
@@ -764,12 +343,12 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Inductive Think-Aloud Framework UI')
-    parser.add_argument('--config', type=str, default='config/config.yaml',
-                        help='Path to config file (default: config/config.yaml for your research data, use config/config_demo.yaml for demo)')
+    parser.add_argument('--config', type=str, default='config/config_demo.yaml',
+                        help='Path to config file (default: config/config_demo.yaml for the demo; use config/config.yaml for your own research data)')
     parser.add_argument('--port', type=int, default=5002,
                         help='Port to run server on (default: 5002)')
-    parser.add_argument('--debug', action='store_true', default=True,
-                        help='Run in debug mode (default: True)')
+    parser.add_argument('--debug', action='store_true', default=False,
+                        help='Run in debug mode (default: False)')
 
     args = parser.parse_args()
 
@@ -790,15 +369,15 @@ if __name__ == '__main__':
     app.config['exporter'] = JSONLExporter(exports_dir)
 
     print(f"\n{'='*60}")
-    print(f"🚀 Inductive Think-Aloud Framework UI")
+    print("Inductive Think-Aloud Framework UI")
     print(f"{'='*60}")
     print(f"Config file: {args.config}")
     print(f"Transcripts: {config['paths']['transcripts_dir']}")
     print(f"Exports: {config['paths']['exports_dir']}")
     print(f"Port: {args.port}")
     print(f"{'='*60}\n")
-    print(f"👉 Open your browser to: http://localhost:{args.port}")
-    print(f"\n💡 Tip: Use --config config/config_demo.yaml for demo data")
+    print(f"Open your browser to: http://localhost:{args.port}")
+    print("\nTip: Use --config config/config_demo.yaml for demo data")
     print(f"{'='*60}\n")
 
     app.run(debug=args.debug, port=args.port)

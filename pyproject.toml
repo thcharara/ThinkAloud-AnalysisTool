@@ -3,6 +3,9 @@ name = "thinkaloud"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-  "pandas", "numpy", "regex", "pydantic", "rich", "matplotlib", "seaborn",
-  "scipy", "scikit-learn", "rapidfuzz", "flask"
+  "flask", "pyyaml", "pydantic", "typer", "rich", "unidecode"
 ]
+
+[project.optional-dependencies]
+# Optional tooling for downstream analysis of exported CSV/JSONL data.
+analysis = ["pandas", "numpy", "matplotlib", "seaborn", "scikit-learn", "jupyter", "ipykernel"]

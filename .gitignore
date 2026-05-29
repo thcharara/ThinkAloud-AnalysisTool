@@ -11,7 +11,7 @@ admin/
 Inductive-ThinkAloud.nvpx
 clean_transcripts/
 exports/
-demo_exports/
+demo_exports/*
 !demo_exports/.gitkeep
 demo_store/
 *.log

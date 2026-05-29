@@ -4,7 +4,7 @@
 ## Tier A — Operations
 - **ORIENT** — Initial orientation and task framing.
 - **OBSERVE_DESCRIBE** — Pure description of visible features; no inference.
-- **INFERENCE** — Pattern-seeking, comparison, or preliminary reasoning (formerly COMPARE_CONTRAST).
+- **INFERENCE** — Pattern-seeking, comparison, or preliminary reasoning.
 - **HYPOTHESIZE** — Proposes a candidate rule (explicit or implicit).
 - **TEST_SEEK_EVIDENCE** — Checks candidate against panels; cites cases.
 - **EVALUATE_REVISE** — Evaluates, revises, weakens, or abandons the hypothesis.
@@ -47,17 +47,12 @@
 - **Logical_Overfit** — Adds conjuncts to patch mismatches.
 - **Scope_Mismatch** — Treats correlate as cause; wrong scope.
 - **Attribute_Confusion** — Mixes/omits key attributes (e.g., size).
-### B7_MetaType
-*Use only when Tier A operation is META_COGNITION*
-- **Affective** — Emotional response, difficulty statements ("This is hard," "I'm confused").
-- **Strategic** — Explicit planning, strategy articulation ("Let me check all lit panels first," "I'll test each color").
-- **Monitoring** — Self-assessment, progress evaluation ("Am I on the right track?," "I'm not making progress").
 
 ## Tier C — Strategy
-- **SearchMode_featureBreadth** — Scans many different features quickly.
-- **SearchMode_panelBreadth** — Moves across many panels/stimuli quickly.
-- **SearchMode_featureDepth** — Locks onto one feature and explores thoroughly.
-- **SearchMode_panelDepth** — Examines a single panel or small subset deeply.
+- **SearchMode_featureBreadth** — Scans many features quickly (breadth across features).
+- **SearchMode_panelBreadth** — Scans many panels quickly (breadth across panels).
+- **SearchMode_featureDepth** — Examines one feature deeply across panels.
+- **SearchMode_panelDepth** — Examines one panel deeply across features.
 - **HypMgmt_SingleTrack** — Pursues one idea at a time.
 - **HypMgmt_Parallel** — Holds multiple competing ideas.
 - **HypMgmt_Elimination** — Systematic elimination.
@@ -72,14 +67,10 @@
 - **CrossScene_AdaptiveShift** — Adjusts strategy appropriately.
 
 ## Step Tags
-- **STEP_OBS** — Observation (initial feature detection)
-- **STEP_INFERENCE** — Inference/pattern-seeking (between observation and hypothesis)
+- **STEP_OBS** — Observation
+- **STEP_INFERENCE** — Pattern-seeking or comparison before a hypothesis
 - **STEP_HYP** — Hypothesis proposal
 - **STEP_TEST_CONFIRM** — Test with confirming evidence
 - **STEP_TEST_DISCONFIRM** — Test with disconfirming evidence
 - **STEP_REVISE** — Revision after conflict
 - **STEP_COMMIT** — Commit/answer
-
-## Notes
-- **Cross-panel comparison**: Use INFERENCE operation + B3_EvidenceType (Mixed) to capture when participant compares lit vs unlit panels
-- **Reasoning sequence**: OBS → INFERENCE → HYP → TEST → REVISE → COMMIT

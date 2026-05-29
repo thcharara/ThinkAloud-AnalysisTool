@@ -4,8 +4,7 @@
 
 paths:
   transcripts_dir: demo_data/transcripts
-  metadata_dir: demo_data/metadata
-  ground_truth: demo_data/ground_truth/SceneKeys.csv
+  ground_truth: demo_data/ground_truth/SceneKeys.yaml
   exports_dir: demo_exports
   figures_dir: demo_exports/figures
 

@@ -92,6 +92,22 @@ class CodebookSpec(BaseModel):
         """Get Tier C strategy codes."""
         return self.tiers.get("C_Strategy", {})
 
+    def subgroup_by_prefix(self, codes: Dict[str, str]) -> Dict[str, Dict[str, str]]:
+        """Group a {code: desc} dict by each code's prefix (text before first '_').
+
+        Preserves insertion order. Used by the UI to lay out codes by category
+        (e.g. Tier C strategies, or B1 feature families) without hardcoding groups.
+        """
+        grouped: Dict[str, Dict[str, str]] = {}
+        for code, desc in codes.items():
+            prefix = code.split('_', 1)[0]
+            grouped.setdefault(prefix, {})[code] = desc
+        return grouped
+
+    def get_tier_c_grouped(self) -> Dict[str, Dict[str, str]]:
+        """Tier C strategy codes grouped by prefix (SearchMode, HypMgmt, ...)."""
+        return self.subgroup_by_prefix(self.get_tier_c_strategy())
+
     def get_all_operation_codes(self) -> List[str]:
         """Get list of all Tier A operation codes."""
         return list(self.get_tier_a_operations().keys())
@@ -149,17 +165,22 @@ class ProjectLoader:
     def __init__(self, project_root: str | Path, config_path: Optional[str] = None):
         self.root = Path(project_root)
         self.codebook_path = self.root / "codebook" / "codebook.yaml"
-        self.scene_keys_path = self.root / "ground_truth" / "SceneKeys.yaml"
         self.config_path = self.root / (config_path or "config/config.yaml")
 
-        # Load config to get exports_dir
+        # Defaults; overridden from config when available. Ground truth is
+        # optional, so scene_keys_path stays None unless the config points at one.
+        self.scene_keys_path: Optional[Path] = None
+        self.corpus_path = self.root / "exports" / "corpus_enriched.jsonl"
+
         if self.config_path.exists():
             with open(self.config_path) as f:
-                config = yaml.safe_load(f)
-                exports_dir = config.get('paths', {}).get('exports_dir', 'exports')
-                self.corpus_path = self.root / exports_dir / "corpus_enriched.jsonl"
-        else:
-            self.corpus_path = self.root / "exports" / "corpus_enriched.jsonl"
+                config = yaml.safe_load(f) or {}
+            paths = config.get('paths', {})
+            exports_dir = paths.get('exports_dir', 'exports')
+            self.corpus_path = self.root / exports_dir / "corpus_enriched.jsonl"
+            ground_truth = paths.get('ground_truth')
+            if ground_truth:
+                self.scene_keys_path = self.root / ground_truth
 
     def validate_all(self) -> ValidationResult:
         """
@@ -170,23 +191,31 @@ class ProjectLoader:
         """
         result = ValidationResult()
 
-        # Validate file existence
+        # Validate file existence (codebook + config are required)
         if not self.codebook_path.exists():
             result.add_error("codebook", f"Codebook file not found: {self.codebook_path}")
-        if not self.scene_keys_path.exists():
-            result.add_error("ground_truth", f"SceneKeys file not found: {self.scene_keys_path}")
         if not self.config_path.exists():
             result.add_error("config", f"Config file not found: {self.config_path}")
 
-        # If files don't exist, stop here
+        # Ground truth is optional: warn (don't block) when it is absent so that
+        # researchers without a ground-truth key can still use every other feature.
+        has_ground_truth = self.scene_keys_path is not None and self.scene_keys_path.exists()
+        if not has_ground_truth:
+            result.add_warning(
+                "ground_truth",
+                "No ground-truth SceneKeys file configured; Distance-to-Truth will be disabled.",
+            )
+
+        # If required files don't exist, stop here
         if not result.is_valid():
             return result
 
         # Validate codebook
         self._validate_codebook(result)
 
-        # Validate scene keys
-        self._validate_scene_keys(result)
+        # Validate scene keys (only when a ground-truth file is present)
+        if has_ground_truth:
+            self._validate_scene_keys(result)
 
         # Validate config
         self._validate_config(result)
@@ -333,7 +362,9 @@ class ProjectLoader:
         return CodebookSpec(**data)
 
     def load_scene_keys(self) -> List[SceneKey]:
-        """Load SceneKeys.yaml (after validation passes)."""
+        """Load SceneKeys.yaml if configured; returns [] when ground truth is absent."""
+        if self.scene_keys_path is None or not self.scene_keys_path.exists():
+            return []
         with open(self.scene_keys_path) as f:
             data = yaml.safe_load(f)
         return [SceneKey(**scene) for scene in data]

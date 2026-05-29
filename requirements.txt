@@ -1,15 +1,9 @@
-pandas
-numpy
-pydantic
-regex
-rich
-typer[all]
-pyyaml
-unidecode
-python-dateutil
-matplotlib
-scikit-learn
-seaborn
-jupyter
-ipykernel
+# Runtime dependencies for the coding tool + CLI.
+# For downstream statistical analysis (pandas, matplotlib, notebooks), see the
+# optional "analysis" extra in pyproject.toml:  pip install -e ".[analysis]"
 flask
+pyyaml
+pydantic
+typer
+rich
+unidecode
